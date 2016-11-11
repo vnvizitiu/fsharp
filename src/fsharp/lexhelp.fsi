@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Open Technologies, Inc.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 module internal Microsoft.FSharp.Compiler.Lexhelp
 
@@ -67,5 +67,4 @@ module Keywords =
     val KeywordOrIdentifierToken : lexargs -> UnicodeLexing.Lexbuf -> string -> Parser.token
     val IdentifierToken : lexargs -> UnicodeLexing.Lexbuf -> string -> Parser.token
     val QuoteIdentifierIfNeeded : string -> string
-    val mutable permitFsharpKeywords : bool 
     val keywordNames : string list

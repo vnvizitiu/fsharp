@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Open Technologies, Inc.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 namespace Internal.Utilities.Collections.Tagged
 
@@ -711,9 +711,6 @@ namespace Internal.Utilities.Collections.Tagged
 #if ONE 
         | MapOne of 'Key * 'T
 #endif
-        // Note: performance rumour has it that the data held in this node should be
-        // exactly one cache line. It is currently ~7 words. Thus it might be better to
-        // move to a n-way tree.
         | MapNode of 'Key * 'T * MapTree<'Key,'T> *  MapTree<'Key,'T> * int
 
 
@@ -1176,6 +1173,5 @@ namespace Internal.Utilities.Collections.Tagged
         override this.GetHashCode() = this.ComputeHashCode()
 
 
-    type Map<'Key,'T> = Map<'Key, 'T, IComparer<'Key>>    
-    type Set<'T> = Set<'T, IComparer<'T>>    
-
+    type internal Map<'Key,'T> = Map<'Key, 'T, IComparer<'Key>>
+    type internal Set<'T> = Set<'T, IComparer<'T>>

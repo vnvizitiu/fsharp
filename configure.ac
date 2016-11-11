@@ -46,8 +46,9 @@ fi
 
 AC_ARG_WITH([bootstrap], 
         [  --with-bootstrap=<path>], 
-        [], [with_bootstrap=lib/bootstrap])
-with_bootstrap=$(cd "$with_bootstrap" && pwd)
+        [], [with_bootstrap=packages/FSharp.Compiler.Tools.4.0.1.3/tools])
+with_bootstrap=$(mkdir -p "$with_bootstrap" && cd "$with_bootstrap" && pwd)
+AC_MSG_NOTICE(Using bootstrap : $with_bootstrap)
 AC_SUBST(with_bootstrap)
 
 AC_ARG_WITH([gacdir],
@@ -164,7 +165,6 @@ src/fsharp/FSharp.Compiler/Makefile
 src/fsharp/Fsc/Makefile
 src/fsharp/FSharp.Compiler.Interactive.Settings/Makefile
 src/fsharp/FSharp.Compiler.Server.Shared/Makefile
-src/fsharp/FSharp.Data.TypeProviders/Makefile
 src/fsharp/fsi/Makefile
 src/fsharp/fsiAnyCpu/Makefile
 src/fsharp/policy.2.0.FSharp.Core/Makefile

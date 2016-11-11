@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Open Technologies, Inc.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 #nowarn "44" // This construct is deprecated. This function is for use by compiled F# code and should not be used directly
 namespace System.Numerics
@@ -305,7 +305,7 @@ namespace System.Numerics
             | _ -> invalidArg "x" "signs should be +/- 1 or 0"
              
         static member Parse(text:string) =
-            if text = null then raise (new ArgumentNullException("text"))
+            if isNull text then raise (new ArgumentNullException("text"))
             let text = text.Trim()
             let len = text.Length 
             if len = 0 then raise (new System.FormatException(SR.GetString(SR.badFormatString)))

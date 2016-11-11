@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Open Technologies, Inc.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 /// <summary>This namespace contains constructs for reflecting on the representation of
 /// F# values and types. It augments the design of System.Reflection.</summary>
@@ -324,6 +324,16 @@ type FSharpType =
     /// <returns>The type representing the tuple containing the input elements.</returns>
     static member MakeTupleType: types:Type[] -> Type
 
+    /// <summary>Returns a <c>System.Type</c> representing an F# tuple type with the given element types</summary>
+    /// <param name="types">An array of types for the tuple elements.</param>
+    /// <returns>The type representing the tuple containing the input elements.</returns>
+    static member MakeTupleType: asm:Assembly * types:Type[] -> Type
+
+    /// <summary>Returns a <c>System.Type</c> representing an F# struct tuple type with the given element types</summary>
+    /// <param name="types">An array of types for the tuple elements.</param>
+    /// <returns>The type representing the struct tuple containing the input elements.</returns>
+    static member MakeStructTupleType: asm:Assembly * types:Type[] -> Type
+
     /// <summary>Return true if the <c>typ</c> is a representation of an F# tuple type </summary>
     /// <param name="typ">The type to check.</param>
     /// <returns>True if the type check succeeds.</returns>
@@ -515,84 +525,6 @@ module FSharpReflectionExtensions =
         /// <returns>True if the type check is an F# exception.</returns>
         static member IsExceptionRepresentation: exceptionType:Type * ?allowAccessToPrivateRepresentation : bool -> bool
 
-#if FX_RESHAPED_REFLECTION
-
-namespace Microsoft.FSharp.Core
-
-open System
-open System.Reflection
-
-module internal ReflectionAdapters =
-
-    [<System.Flags>]
-    type BindingFlags =
-        | DeclaredOnly  = 2
-        | Instance      = 4 
-        | Static        = 8
-        | Public        = 16
-        | NonPublic     = 32
-
-    val isDeclaredFlag  : BindingFlags -> bool
-    val isPublicFlag    : BindingFlags -> bool
-    val isStaticFlag    : BindingFlags -> bool
-    val isInstanceFlag  : BindingFlags -> bool
-    val isNonPublicFlag : BindingFlags -> bool
-    val isAcceptable    : BindingFlags -> isStatic : bool -> isPublic : bool -> bool    
-
-    [<System.Flags>]
-    type TypeCode = 
-        | Int32     = 0
-        | Int64     = 1
-        | Byte      = 2
-        | SByte     = 3
-        | Int16     = 4
-        | UInt16    = 5
-        | UInt32    = 6
-        | UInt64    = 7
-        | Single    = 8
-        | Double    = 9
-        | Decimal   = 10
-        | Other     = 11
-
-    type System.Type with
-        member GetNestedType : name : string * bindingFlags : BindingFlags -> Type
-        member GetMethods : bindingFlags : BindingFlags -> MethodInfo[]
-        member GetFields : bindingFlags : BindingFlags -> FieldInfo[]
-        member GetProperties : ?bindingFlags : BindingFlags -> PropertyInfo[]
-        member GetMethod : name : string * ?bindingFlags : BindingFlags -> MethodInfo
-        member GetProperty : name : string * bindingFlags : BindingFlags -> PropertyInfo
-        member IsGenericTypeDefinition : bool
-        member GetGenericArguments : unit -> Type[]
-        member BaseType : Type
-        member GetConstructor : parameterTypes : Type[] -> ConstructorInfo
-        member GetInterfaces : unit -> Type[]
-        member GetConstructors : ?bindingFlags : BindingFlags -> ConstructorInfo[]
-        member GetMethods : unit -> MethodInfo[]
-        member Assembly : Assembly
-        member IsSubclassOf : Type -> bool
-        member IsEnum : bool
-        member GetField : string * BindingFlags -> FieldInfo
-        member GetProperty : string * Type * Type[] -> PropertyInfo
-        static member GetTypeCode : System.Type -> TypeCode
-
-    type System.Reflection.Assembly with
-        member GetTypes : unit -> Type[]
-
-    type System.Reflection.MemberInfo with
-        member GetCustomAttributes : attributeType : Type * inherits : bool -> obj[]
-
-    type System.Reflection.MethodInfo with
-        member GetCustomAttributes : inherits : bool -> obj[]
-
-    type System.Reflection.PropertyInfo with
-        member GetGetMethod : bool -> MethodInfo
-        member GetSetMethod : bool -> MethodInfo
-
-    type System.Delegate with
-        static member CreateDelegate :  Type * MethodInfo -> System.Delegate
-        static member CreateDelegate :  Type * obj * MethodInfo -> System.Delegate
-            
-#endif
 
 namespace Microsoft.FSharp.Reflection
 
@@ -600,7 +532,7 @@ open Microsoft.FSharp.Core
 
 module internal ReflectionUtils = 
 #if FX_RESHAPED_REFLECTION
-    type BindingFlags = ReflectionAdapters.BindingFlags
+    type internal BindingFlags = ReflectionAdapters.BindingFlags
 #else
     type BindingFlags = System.Reflection.BindingFlags
 #endif

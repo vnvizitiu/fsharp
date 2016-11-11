@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Open Technologies, Inc.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 /// This namespace contains FSharp.PowerPack extensions for FSharp.Build.dll. MSBuild tasks for the FsYacc and FsLex tools.
 namespace Microsoft.FSharp.Build
@@ -13,6 +13,7 @@ type Fsc = class
 
              member internal InternalGenerateFullPathToTool : unit -> System.String
              member internal InternalGenerateCommandLineCommands : unit -> System.String
+             member internal InternalGenerateResponseFileCommands : unit -> System.String
              member internal InternalExecuteTool : string * string * string -> int
              member internal GetCapturedArguments : unit -> string[]
              member BaseAddress : string with get,set
@@ -54,5 +55,5 @@ type Fsc = class
              member SubsystemVersion : string with get,set
              member HighEntropyVA : bool with get,set
              member TargetProfile : string with get,set
-             member SqmSessionGuid : string with get,set
+             member DotnetFscCompilerPath : string with get,set
            end

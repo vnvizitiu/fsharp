@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Open Technologies, Inc.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 namespace Microsoft.FSharp.Quotations
 
@@ -24,7 +24,7 @@ open Microsoft.FSharp.Text.StructuredPrintfImpl.LayoutOps
 #if FX_RESHAPED_REFLECTION
 open PrimReflectionAdapters
 open ReflectionAdapters
-type BindingFlags = ReflectionAdapters.BindingFlags
+type internal BindingFlags = ReflectionAdapters.BindingFlags
 #endif
 
 //--------------------------------------------------------------------------
@@ -91,14 +91,16 @@ open Helpers
 [<CompiledName("FSharpVar")>]
 [<System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Usage","CA2218:OverrideGetHashCodeOnOverridingEquals",Justification="Equals override does not equate further objects, so default GetHashCode is still valid")>]
 type Var(name: string, typ:Type, ?isMutable: bool) =
-
     inherit obj()
-    static let mutable lastStamp = 0L
+
+    static let getStamp =
+        let mutable lastStamp = -1L // first value retrieved will be 0
+        fun () -> System.Threading.Interlocked.Increment &lastStamp
+
     static let globals = new Dictionary<(string*Type),Var>(11)
 
-    let stamp = lastStamp    
+    let stamp = getStamp ()
     let isMutable = defaultArg isMutable false
-    do lock globals (fun () -> lastStamp <- lastStamp + 1L)
     
     member v.Name = name
     member v.IsMutable = isMutable
@@ -931,7 +933,7 @@ module Patterns =
             | Some methInfo -> methInfo 
 
     let bindMethodHelper (parentT: Type, nm,marity,argtys,rty) =
-      if parentT = null then invalidArg "parentT" (SR.GetString(SR.QparentCannotBeNull))
+      if isNull parentT then invalidArg "parentT" (SR.GetString(SR.QparentCannotBeNull))
       if marity = 0 then 
           let tyargTs = if parentT.IsGenericType then parentT.GetGenericArguments() else [| |] 
           let argTs = Array.ofList (List.map (instFormal tyargTs) argtys) 
@@ -1753,12 +1755,12 @@ module Patterns =
                 match assem with 
 #if FX_NO_REFLECTION_EMIT
 #else
-                | :? System.Reflection.Emit.AssemblyBuilder -> []
+                | a when a.FullName = "System.Reflection.Emit.AssemblyBuilder" -> []
 #endif
-                | _ -> 
+                | null | _ -> 
                     let resources = 
                         // This raises NotSupportedException for dynamic assemblies
-                        try assem.GetManifestResourceNames()  
+                        try assem.GetManifestResourceNames()
                         with :? NotSupportedException -> [| |]
                     [ for resourceName in resources do
                           if resourceName.StartsWith(ReflectedDefinitionsResourceNameBase,StringComparison.Ordinal) &&

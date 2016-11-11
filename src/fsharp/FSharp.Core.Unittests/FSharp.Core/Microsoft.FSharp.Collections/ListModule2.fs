@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Open Technologies, Inc.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 // Various tests for the:
 // Microsoft.FSharp.Collections.List module
@@ -97,6 +97,13 @@ type ListModule02() =
         let resultStr = List.map3 funcStr ["A";"B";"C";"D"] ["a";"b";"c";"d"] ["1";"2";"3";"4"]        
         Assert.AreEqual(["Aa1";"Bb2";"Cc3";"Dd4"], resultStr)
         
+        // lists of different length
+        let shortList = [1]
+        let longerList = [1; 2]
+        CheckThrowsArgumentException  (fun () -> List.map3 funcInt shortList shortList longerList |> ignore)
+        CheckThrowsArgumentException  (fun () -> List.map3 funcInt shortList longerList shortList |> ignore)
+        CheckThrowsArgumentException  (fun () -> List.map3 funcInt shortList shortList longerList |> ignore)  
+
         // empty List
         let resultEpt = List.map3 funcInt List.empty List.empty List.empty
         Assert.AreEqual(List.empty<int>, resultEpt)
@@ -176,6 +183,12 @@ type ListModule02() =
         let resultStr = List.mapi2 funcStr [3;6;9;11] ["a";"b";"c";"d"]        
         Assert.AreEqual([4;8;12;15], resultStr)
         
+        // lists of different length
+        let shortList = [1]
+        let longerList = [1; 2]       
+        CheckThrowsArgumentException  (fun () -> List.mapi2 funcInt shortList longerList |> ignore)
+        CheckThrowsArgumentException  (fun () -> List.mapi2 funcInt longerList shortList |> ignore)
+
         // empty List
         let emptyArr:int list = [ ]
         let resultEpt = List.mapi2 funcInt emptyArr emptyArr        

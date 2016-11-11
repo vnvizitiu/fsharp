@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Open Technologies, Inc.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 %{
 
@@ -26,7 +26,7 @@ type SigArg = SigArg of (string option * ILType)  | Sentinel
 let decodeVarargs args = 
   let rec normals = function 
     | [] -> ([],None)
-    | Sentinel :: t -> ([],Some (ILList.ofList (varargs t)))
+    | Sentinel :: t -> ([],Some (varargs t))
     | SigArg (_,p)::t -> let (n,r) = normals t in (p::n, r)
   and varargs = function 
     | [] -> []
@@ -46,7 +46,7 @@ let resolveMethodSpecScopeThen (ResolvedAtMethodSpecScope f) g =
 let resolveFormalMethodSpecScope tspeco obj = 
   match tspeco with 
     None ->  resolveMethodSpecScope obj mkILEmptyGenericParams
-  | Some (tspec:ILTypeSpec) -> resolveMethodSpecScope obj (mkILFormalTyparsRaw tspec.GenericArgs)
+  | Some (tspec:ILTypeSpec) -> resolveMethodSpecScope obj (mkILFormalTypars tspec.GenericArgs)
 
 let resolveCurrentMethodSpecScope obj = 
     resolveMethodSpecScope obj mkILEmptyGenericParams

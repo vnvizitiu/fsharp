@@ -1,9 +1,9 @@
-// Copyright (c) Microsoft Open Technologies, Inc.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 /// Binary reader.  Read a .NET binary and concert it to Abstract IL data
 /// structures.
 /// 
-/// Notes:
+/// NOTE:
 ///   - The metadata in the loaded modules will be relative to 
 ///     those modules, e.g. ILScopeRef.Local will mean "local to 
 ///     that module".  You must use [rescopeILType] etc. if you want to include 
@@ -14,7 +14,7 @@
 ///     This indicates if you want to search for PDB files and have the 
 ///     reader fold them in.  You cannot currently name the pdb file 
 ///     directly - you can only name the path.  Giving "None" says 
-///     "do not read the PDB file even if one exists" 
+///     "do not read the PDB file even if one exists". 
 /// 
 ///     The debug info appears primarily as I_seqpoint annotations in 
 ///     the instruction streams.  Unfortunately the PDB information does

@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
-    <FSharpSourcesRoot>..\..\src</FSharpSourcesRoot>
+    <FSharpSourcesRoot>$(MSBuildProjectDirectory)\..\..\src\</FSharpSourcesRoot>
     <ProjectGuid>{C163E892-5BF7-4B59-AA99-B0E8079C67C4}</ProjectGuid>
   </PropertyGroup>
   <Import Project="$(FSharpSourcesRoot)\FSharpSource.Settings.targets" />
@@ -65,7 +65,9 @@
     <Compile Include="..\..\src\update.fs">
       <Link>update.fs</Link>
     </Compile>
+    <Compile Include="..\..\src\fsharp\FSharp.Compiler.Unittests\NunitHelpers.fs" />
     <Compile Include="nunitConf.fs" />
+    <Compile Include="FSharpTestSuiteAsserts.fs" />
     <Compile Include="single-test-build.fs" />
     <Compile Include="single-test-run.fs" />
     <Compile Include="single-neg-test.fs" />
@@ -90,7 +92,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="typeProviders\build-typeprovider-test.fs" />
-    <Compile Include="typeProviders\builtin\copyFSharpDataTypeProviderDLL.fs" />
     <Compile Include="typeProviders\tests_typeProviders.fs" /> 
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="fsc\ProductVersion.fs" />
+    <Compile Include="fsc\FileVersionInfo.fs" />
+    <Compile Include="fsc\warnings\FS2003\Warning_FS2003.fs" />
   </ItemGroup>
 </Project>

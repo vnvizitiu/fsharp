@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Open Technologies, Inc.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 module internal Microsoft.FSharp.Compiler.AbstractIL.Internal.Library 
 #nowarn "1178" // The struct, record or union type 'internal_instr_extension' is not structurally comparable because the type
@@ -9,21 +9,53 @@ open System.Collections
 open System.Collections.Generic
 open Internal.Utilities
 open Internal.Utilities.Collections
+open Microsoft.FSharp.Compiler.AbstractIL.Diagnostics
+
+#if FX_RESHAPED_REFLECTION
+open Microsoft.FSharp.Core.ReflectionAdapters
+#endif
 
 // Logical shift right treating int32 as unsigned integer.
 // Code that uses this should probably be adjusted to use unsigned integer types.
 let (>>>&) (x:int32) (n:int32) = int32 (uint32 x >>> n)
 
-let notlazy v = Lazy.CreateFromValue v
+let notlazy v = Lazy<_>.CreateFromValue v
 
-let isSome x = match x with None -> false | _ -> true
-let isNone x = match x with None -> true | _ -> false
-let isNil x = match x with [] -> true | _ -> false
-let nonNil x = match x with [] -> false | _ -> true
-let isNull (x : 'T) = match (x :> obj) with null -> true | _ -> false
-let isNonNull (x : 'T) = match (x :> obj) with null -> false | _ -> true
-let nonNull msg x = if isNonNull x then x else failwith ("null: " ^ msg) 
+let inline isNonNull x = not (isNull x)
+let inline nonNull msg x = if isNull x then failwith ("null: " ^ msg) else x
 let (===) x y = LanguagePrimitives.PhysicalEquality x y
+
+//---------------------------------------------------------------------
+// Library: ReportTime
+//---------------------------------------------------------------------
+let reportTime =
+    let tFirst = ref None     
+    let tPrev = ref None     
+    fun showTimes descr ->
+        if showTimes then 
+            let t = System.Diagnostics.Process.GetCurrentProcess().UserProcessorTime.TotalSeconds
+            let prev = match !tPrev with None -> 0.0 | Some t -> t
+            let first = match !tFirst with None -> (tFirst := Some t; t) | Some t -> t
+            dprintf "ilwrite: TIME %10.3f (total)   %10.3f (delta) - %s\n" (t - first) (t - prev) descr
+            tPrev := Some t
+
+//-------------------------------------------------------------------------
+// Library: projections
+//------------------------------------------------------------------------
+
+[<Struct>]
+/// An efficient lazy for inline storage in a class type. Results in fewer thunks.
+type InlineDelayInit<'T when 'T : not struct> = 
+    new (f: unit -> 'T) = {store = Unchecked.defaultof<'T>; func = System.Func<_>(f) } 
+    val mutable store : 'T
+    val mutable func : System.Func<'T>
+    member x.Value = 
+        match x.func with 
+        | null -> x.store 
+        | _ -> 
+        let res = System.Threading.LazyInitializer.EnsureInitialized(&x.store, x.func) 
+        x.func <- Unchecked.defaultof<_>
+        res
 
 //-------------------------------------------------------------------------
 // Library: projections
@@ -48,8 +80,6 @@ module Order =
 
 module Array = 
 
-    let take n xs = xs |> Seq.take n |> Array.ofSeq
-
     let mapq f inp =
         match inp with
         | [| |] -> inp
@@ -62,13 +92,6 @@ module Array =
                 if not (inp.[i] === res.[i]) then eq <- false;
                 i <- i + 1
             if eq then inp else res
-
-    let forall2 f (arr1:'T array) (arr2:'T array) =
-        let len1 = arr1.Length 
-        let len2 = arr2.Length 
-        if len1 <> len2 then invalidArg "Array.forall2" "len1"
-        let rec loop i = (i >= len1) || (f arr1.[i] arr2.[i] && loop (i+1))
-        loop 0
 
     let lengthsEqAndForall2 p l1 l2 = 
         Array.length l1 = Array.length l2 &&
@@ -83,19 +106,6 @@ module Array =
             res.[i] <- h';
             acc <- s'
         res, acc
-
-
-    // REVIEW: systematically eliminate foldMap/mapFold duplication. 
-    // They only differ by the tuple returned by the function.
-    let foldMap f s l = 
-        let mutable acc = s
-        let n = Array.length l
-        let mutable res = Array.zeroCreate n
-        for i = 0 to n - 1 do
-            let s',h' = f acc l.[i]
-            res.[i] <- h'
-            acc <- s'
-        acc, res
 
     let order (eltOrder: IComparer<'T>) = 
         { new IComparer<array<'T>> with 
@@ -151,12 +161,10 @@ module Option =
         | None -> dflt 
         | Some x -> x
 
-    // REVIEW: systematically eliminate foldMap/mapFold duplication
-    let foldMap f z l = 
-        match l with 
-        | None   -> z,None
-        | Some x -> let z,x = f z x
-                    z,Some x
+    let orElse dflt opt = 
+        match opt with 
+        | None -> dflt()
+        | res -> res
 
     let fold f z x = 
         match x with 
@@ -165,6 +173,11 @@ module Option =
 
 
 module List = 
+
+#if FX_RESHAPED_REFLECTION
+    open PrimReflectionAdapters
+    open Microsoft.FSharp.Core.ReflectionAdapters
+#endif
 
     let sortWithOrder (c: IComparer<'T>) elements = List.sortWith (Order.toFunction c) elements
     
@@ -292,14 +305,9 @@ module List =
                       | x::xs,y::ys -> let cxy = eltOrder.Compare(x,y)
                                        if cxy=0 then loop xs ys else cxy 
                   loop xs ys }
-
-
-    let rec last l = match l with [] -> failwith "last" | [h] -> h | _::t -> last t
+    
     module FrontAndBack = 
         let (|NonEmpty|Empty|) l = match l with [] -> Empty | _ -> NonEmpty(frontAndBack l)
-
-    let replicate x n = 
-        Array.toList (Array.create x n)
 
     let range n m = [ n .. m ]
 
@@ -315,32 +323,23 @@ module List =
         | [] -> false
         | ((h,_)::t) -> x = h || memAssoc x t
 
-    let rec contains x l = match l with [] -> false | h::t -> x = h || contains x t
-
     let rec memq x l = 
         match l with 
         | [] -> false 
         | h::t -> LanguagePrimitives.PhysicalEquality x h || memq x t
 
-    let mem x l = contains x l
-
     // must be tail recursive 
-    let mapFold f s l = 
+    let mapFold (f:'a -> 'b -> 'c * 'a) (s:'a) (l:'b list) : 'c list * 'a = 
         // microbenchmark suggested this implementation is faster than the simpler recursive one, and this function is called a lot
         let mutable s = s
         let mutable r = []
-        let mutable l = l
-        let mutable finished = false
-        while not finished do
-          match l with
-          | x::xs -> let x',s' = f s x
-                     s <- s'
-                     r <- x' :: r
-                     l <- xs
-          | _ -> finished <- true
+        for x in l do
+            let x',s' = f s x
+            s <- s'
+            r <- x' :: r
         List.rev r, s
 
-    // note: not tail recursive 
+    // Not tail recursive 
     let rec mapFoldBack f l s = 
         match l with 
         | [] -> ([],s)
@@ -360,9 +359,6 @@ module List =
 
     let count pred xs = List.fold (fun n x -> if pred x then n+1 else n) 0 xs
 
-    let rec private repeatAux n x acc = if n <= 0 then acc else repeatAux (n-1) x (x::acc)
-    let repeat n x = repeatAux n x []
-
     // WARNING: not tail-recursive 
     let mapHeadTail fhead ftail = function
       | []    -> []
@@ -372,19 +368,6 @@ module List =
     let collectFold f s l = 
       let l, s = mapFold f s l
       List.concat l, s
-
-    let singleton x = [x]
-
-    // note: must be tail-recursive 
-    let rec private foldMapAux f z l acc =
-      match l with
-      | []    -> z,List.rev acc
-      | x::xs -> let z,x = f z x
-                 foldMapAux f z xs (x::acc)
-                 
-    // note: must be tail-recursive 
-    // REVIEW: systematically eliminate foldMap/mapFold duplication
-    let foldMap f z l = foldMapAux f z l []
 
     let collect2 f xs ys = List.concat (List.map2 f xs ys)
 
@@ -450,7 +433,7 @@ module String =
         else
             None
 
-    let hasPrefix s t = isSome (tryDropPrefix s t)
+    let hasPrefix s t = Option.isSome (tryDropPrefix s t)
     let dropPrefix s t = match (tryDropPrefix s t) with Some(res) -> res | None -> failwith "dropPrefix"
 
     let dropSuffix s t = match (tryDropSuffix s t) with Some(res) -> res | None -> failwith "dropSuffix"
@@ -461,30 +444,9 @@ module Dictionary =
         let dict = new System.Collections.Generic.Dictionary<_,_>(List.length l, HashIdentity.Structural)
         l |> List.iter (fun (k,v) -> dict.Add(k,v))
         dict
-
-
-// FUTURE CLEANUP: remove this adhoc collection
-type Hashset<'T> = Dictionary<'T,int>
-
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module Hashset = 
-    let create (n:int) = new Hashset<'T>(n, HashIdentity.Structural)
-    let add (t: Hashset<'T>) x = if not (t.ContainsKey x) then t.[x] <- 0
-    let fold f (t:Hashset<'T>) acc = Seq.fold (fun z (KeyValue(x,_)) -> f x z) acc t 
-    let ofList l = 
-        let t = new Hashset<'T>(List.length l, HashIdentity.Structural)
-        l |> List.iter (fun x -> t.[x] <- 0)
-        t
         
 module Lazy = 
     let force (x: Lazy<'T>) = x.Force()
-
-//---------------------------------------------------
-// Lists as sets. This is almost always a bad data structure and should be eliminated from the compiler.  
-
-module ListSet =
-    let insert e l =
-        if List.mem e l then l else e::l
 
 //---------------------------------------------------
 // Misc
@@ -520,74 +482,6 @@ module ResultOrException =
         match x with 
         | Result x -> success x
         | Exception _err -> f()
-
-
-//-------------------------------------------------------------------------
-// Library: extensions to flat list  (immutable arrays)
-//------------------------------------------------------------------------
-#if FLAT_LIST_AS_ARRAY_STRUCT
-//#else
-module FlatList =
-
-    let order (eltOrder: IComparer<_>) =
-        { new IComparer<FlatList<_>> with 
-            member __.Compare(xs,ys) =
-                  match xs.array,ys.array with 
-                  | null,null -> 0
-                  | _,null -> 1
-                  | null,_ -> -1
-                  | arr1,arr2 -> Array.order eltOrder arr1 arr2 }
-
-    let mapq f (x:FlatList<_>) = 
-        match x.array with 
-        | null -> x
-        | arr -> 
-            let arr' = Array.map f arr in 
-            let n = arr.Length in 
-            let rec check i = if i >= n then true else arr.[i] === arr'.[i] && check (i+1) 
-            if check 0 then x else FlatList(arr')
-
-    let mapFold f acc (x:FlatList<_>) = 
-        match x.array with
-        | null -> 
-            FlatList.Empty,acc
-        | arr -> 
-            let  arr,acc = Array.mapFold f acc x.array
-            FlatList(arr),acc
-
-    // REVIEW: systematically eliminate foldMap/mapFold duplication
-    let foldMap f acc (x:FlatList<_>) = 
-        match x.array with
-        | null -> 
-            acc,FlatList.Empty
-        | arr -> 
-            let  acc,arr = Array.foldMap f acc x.array
-            acc,FlatList(arr)
-#endif
-#if FLAT_LIST_AS_LIST
-
-#else
-
-module FlatList =
-    let toArray xs = List.toArray xs
-    let choose f xs = List.choose f xs
-    let order eltOrder = List.order eltOrder 
-    let mapq f (x:FlatList<_>) = List.mapq f x
-    let mapFold f acc (x:FlatList<_>) =  List.mapFold f acc x
-    let foldMap f acc (x:FlatList<_>) =  List.foldMap f acc x
-
-#endif
-
-#if FLAT_LIST_AS_ARRAY
-//#else
-module FlatList =
-    let order eltOrder = Array.order eltOrder 
-    let mapq f x = Array.mapq f x
-    let mapFold f acc x =  Array.mapFold f acc x
-    let foldMap f acc x =  Array.foldMap f acc x
-#endif
-
-
 
 /// Computations that can cooperatively yield by returning a continuation
 ///
@@ -709,6 +603,7 @@ type UniqueStampGenerator<'T when 'T : equality>() =
             nItems <- nItems + 1
             idx
     member this.Encode(str)  = encode str
+    member this.Table = encodeTab.Keys
 
 //---------------------------------------------------------------------------
 // memoize tables (all entries cached, never collected)
@@ -758,8 +653,8 @@ type LazyWithContext<'T,'ctxt> =
           funcOrException = box f;
           findOriginalException = findOriginalException }
     static member NotLazy(x:'T) : LazyWithContext<'T,'ctxt> = 
-        { value = x;
-          funcOrException = null;
+        { value = x
+          funcOrException = null
           findOriginalException = id }
     member x.IsDelayed = (match x.funcOrException with null -> false | :? LazyWithContextFailure -> false | _ -> true)
     member x.IsForced = (match x.funcOrException with null -> true | _ -> false)
@@ -827,7 +722,7 @@ module NameMap =
     let exists f m = Map.foldBack (fun x y sofar -> sofar || f x y) m false
     let ofKeyedList f l = List.foldBack (fun x acc -> Map.add (f x) x acc) l Map.empty
     let ofList l : NameMap<'T> = Map.ofList l
-    let ofFlatList (l:FlatList<_>) : NameMap<'T> = FlatList.toMap l
+    let ofSeq l : NameMap<'T> = Map.ofSeq l
     let toList (l: NameMap<'T>) = Map.toList l
     let layer (m1 : NameMap<'T>) m2 = Map.foldBack Map.add m1 m2
 
@@ -920,7 +815,6 @@ type Map<'Key,'Value when 'Key : comparison> with
         | Some r -> res <- r; true
 
     member x.Values = [ for (KeyValue(_,v)) in x -> v ]
-    member x.Elements = [ for kvp in x -> kvp ]
     member x.AddAndMarkAsCollapsible (kvs: _[])   = (x,kvs) ||> Array.fold (fun x (KeyValue(k,v)) -> x.Add(k,v))
     member x.LinearTryModifyThenLaterFlatten (key, f: 'Value option -> 'Value) = x.Add (key, f (x.TryFind key))
     member x.MarkAsCollapsible ()  = x
@@ -935,13 +829,18 @@ type LayeredMultiMap<'Key,'Value when 'Key : equality and 'Key : comparison>(con
         x.MarkAsCollapsible()
     member x.MarkAsCollapsible() = LayeredMultiMap(contents.MarkAsCollapsible())
     member x.TryFind k = contents.TryFind k
-    member x.Values = contents.Values |> Seq.concat
+    member x.Values = contents.Values |> List.concat
     static member Empty : LayeredMultiMap<'Key,'Value> = LayeredMultiMap LayeredMap.Empty
 
 [<AutoOpen>]
 module Shim =
 
     open System.IO
+
+#if FX_RESHAPED_REFLECTION
+    open PrimReflectionAdapters
+    open Microsoft.FSharp.Core.ReflectionAdapters
+#endif
 
     type IFileSystem = 
         abstract ReadAllBytesShim: fileName:string -> byte[] 
@@ -960,6 +859,7 @@ module Shim =
         abstract FileDelete: fileName:string -> unit
         abstract AssemblyLoadFrom: fileName:string -> System.Reflection.Assembly 
         abstract AssemblyLoad: assemblyName:System.Reflection.AssemblyName -> System.Reflection.Assembly 
+
 
     type DefaultFileSystem() =
         interface IFileSystem with
@@ -1001,7 +901,7 @@ module Shim =
             member __.FileDelete (fileName:string) = System.IO.File.Delete fileName
 
     type System.Text.Encoding with 
-        static member GetEncodingShim(n:int) =             
-                System.Text.Encoding.GetEncoding(n)           
+        static member GetEncodingShim(n:int) = 
+                System.Text.Encoding.GetEncoding(n)
 
     let mutable FileSystem = DefaultFileSystem() :> IFileSystem 

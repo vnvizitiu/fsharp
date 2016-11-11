@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Open Technologies, Inc.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 // Various tests for the:
 // Microsoft.FSharp.Collections.Array module
@@ -21,13 +21,6 @@ Make sure each method works on:
 [<TestFixture>]
 type ArrayModule() =
 
-    let rec IsNaN (x : obj) =
-        match x with
-        | :? float   as x -> Double.IsNaN(x)
-        | :? float32 as x -> Single.IsNaN(x)
-        | :? decimal as x -> Decimal.ToDouble(x) |> box |> IsNaN
-        | _ -> failwith "Invalid input. Please provide a numeric type which could possibly be NaN"
-
     [<Test>]
     member this.Empty() =
         let emptyArray = Array.empty
@@ -40,6 +33,34 @@ type ArrayModule() =
         Assert.IsTrue( (d = [| |]) )
         ()
 
+
+    [<Test>]
+    member this.AllPairs() =
+        // integer array
+        let resultInt =  Array.allPairs [|1..3|] [|2..2..6|]
+        if resultInt <> [|(1,2);(1,4);(1,6)
+                          (2,2);(2,4);(2,6)
+                          (3,2);(3,4);(3,6)|] then Assert.Fail()
+
+        // string array
+        let resultStr = Array.allPairs [|"A"; "B"; "C" ; "D" |] [|"a";"b";"c";"d"|]
+        if resultStr <> [|("A","a");("A","b");("A","c");("A","d")
+                          ("B","a");("B","b");("B","c");("B","d")
+                          ("C","a");("C","b");("C","c");("C","d")
+                          ("D","a");("D","b");("D","c");("D","d")|] then Assert.Fail()
+
+        // empty array
+        if Array.allPairs [||]     [||] <> [||]  then Assert.Fail()
+        if Array.allPairs [|1..3|] [||] <> [||]  then Assert.Fail()
+        if Array.allPairs [||] [|1..3|] <> [||]  then Assert.Fail()
+
+        // null array
+        let nullArr = null:string[]
+        CheckThrowsArgumentNullException (fun () -> Array.allPairs nullArr nullArr  |> ignore)
+        CheckThrowsArgumentNullException (fun () -> Array.allPairs [||]    nullArr  |> ignore)
+        CheckThrowsArgumentNullException (fun () -> Array.allPairs nullArr [||]     |> ignore)
+
+        ()
 
     [<Test>]
     member this.Append() =
@@ -372,7 +393,7 @@ type ArrayModule() =
         if intChoosed.[1] <> 10 then Assert.Fail()
         
         // string array
-        let stringSrc: string [] = "Lists are a commonly used data structure. They are not mutable, i.e., you can't delete an element of a list – instead you create a new list with the element deleted. List values often share storage under the hood, i.e., a list value only allocate more memory when you actually execute construction operations.".Split([|' '|], System.StringSplitOptions.RemoveEmptyEntries)
+        let stringSrc: string [] = "Lists are a commonly used data structure. They are not mutable, i.e., you can't delete an element of a list Â– instead you create a new list with the element deleted. List values often share storage under the hood, i.e., a list value only allocate more memory when you actually execute construction operations.".Split([|' '|], System.StringSplitOptions.RemoveEmptyEntries)
         let funcString x = match x with
                            | "list"-> Some x
                            | "List" -> Some x
@@ -696,7 +717,64 @@ type ArrayModule() =
         let nullArr = null:string[] 
         CheckThrowsArgumentNullException (fun () ->  Array.filter funcStr nullArr |> ignore) 
         
-        ()   
+        ()
+        
+    [<Test>]
+    member this.Filter2 () =
+        // The Array.filter algorith uses a bitmask as a temporary storage mechanism
+        // for which elements to filter. This introduces some possible error conditions
+        // around how the filter is filled and subsequently used, so filter test
+        // does a pretty exhaustive test suite.
+        // It works by first generating arrays which consist of sequences of unique
+        // positive and negative numbers, as per arguments, it then filters for the
+        // positive values, and then compares the results agains the original array.
+
+        let makeTestArray size posLength negLength startWithPos startFromEnd =
+            let array = Array.zeroCreate size
+
+            let mutable sign  = if startWithPos then 1         else -1
+            let mutable count = if startWithPos then posLength else negLength
+            for i = 1 to size do
+                let idx = if startFromEnd then size-i else i-1
+                array.[idx] <- (idx+1) * sign
+                count <- count - 1
+                if count <= 0 then
+                    sign <- sign * -1
+                    count <- if sign > 0 then posLength else negLength
+
+            array
+
+        let checkFilter filter (array:array<_>) =
+            let filtered = array |> filter (fun n -> n > 0)
+
+            let mutable idx = 0
+            for item in filtered do
+                while array.[idx] < item do
+                    idx <- idx + 1
+                if item <> array.[idx] then
+                    Assert.Fail ()
+            idx <- idx + 1
+            while idx < array.Length do
+                if array.[idx] > 0 then
+                    Assert.Fail ()
+                idx <- idx + 1
+
+        let checkCombinations filter maxSize =
+            for size = 0 to maxSize do
+                for posLength = 1 to size do
+                    for negLength = 1 to size do
+                        for startWithPos in [true; false] do
+                            for startFromEnd in [true; false] do
+                                let testArray = makeTestArray size posLength negLength startWithPos startFromEnd
+                                checkFilter filter testArray
+
+        // this could probably be a bit smaller, but needs to at least be > 64 to test chunk copying
+        // of data, and > 96 gives a safer feel, so settle on a nice decimal rounding of one hundred
+        // to appease those with digits.
+        let suitableTestMaxLength = 100 
+
+        checkCombinations Array.filter suitableTestMaxLength
+
 
 
     [<Test>]

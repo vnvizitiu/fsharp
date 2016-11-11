@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Open Technologies, Inc.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 /// LexFilter - process the token stream prior to parsing.
 /// Implements the offside rule and a copule of other lexical transformations.
@@ -534,7 +534,6 @@ type LexFilterImpl (lightSyntaxStatus:LightSyntaxStatus, compilingFsLib, lexer, 
         new LexbufState(lexbuf.StartPos, lexbuf.EndPos, lexbuf.IsPastEndOfStream)  
 
     let setLexbufState (p:LexbufState) =
-        // if debug then dprintf "SET lex state to; %a\n" output_any p;  
         lexbuf.StartPos <- p.StartPos  
         lexbuf.EndPos <- p.EndPos
         lexbuf.IsPastEndOfStream <- p.PastEOF
@@ -927,6 +926,7 @@ type LexFilterImpl (lightSyntaxStatus:LightSyntaxStatus, compilingFsLib, lexer, 
                     | MINUS 
                     | GLOBAL 
                     | CONST
+                    | KEYWORD_STRING _
                     | NULL
                     | INT8 _ | INT16 _ | INT32 _ | INT64 _ | NATIVEINT _ 
                     | UINT8 _ | UINT16 _ | UINT32 _ | UINT64 _ | UNATIVEINT _
@@ -983,6 +983,45 @@ type LexFilterImpl (lightSyntaxStatus:LightSyntaxStatus, compilingFsLib, lexer, 
         setLexbufState(tokenLexbufState)
         prevWasAtomicEnd <- isAtomicExprEndToken(tok)
         tok
+    
+    let rec suffixExists p l = match l with [] -> false | _::t -> p t || suffixExists p t
+
+    let tokenBalancesHeadContext token stack = 
+        match token,stack with 
+        | END, (CtxtWithAsAugment(_)  :: _)
+        | (ELSE | ELIF), (CtxtIf _ :: _)
+        | DONE         , (CtxtDo _ :: _)
+        // WITH balances except in the following contexts.... Phew - an overused keyword! 
+        | WITH         , (  ((CtxtMatch _ | CtxtException _ | CtxtMemberHead _ | CtxtInterfaceHead _ | CtxtTry _ | CtxtTypeDefns _ | CtxtMemberBody _)  :: _)
+                                // This is the nasty record/object-expression case 
+                                | (CtxtSeqBlock _ :: CtxtParen(LBRACE,_)  :: _) )
+        | FINALLY      , (CtxtTry _  :: _) -> 
+            true
+
+        // for x in ienum ... 
+        // let x = ... in
+        | IN           , ((CtxtFor _ | CtxtLetDecl _) :: _) ->
+            true
+        // 'query { join x in ys ... }'
+        // 'query { ... 
+        //          join x in ys ... }'
+        // 'query { for ... do
+        //          join x in ys ... }'
+        | IN           , stack when detectJoinInCtxt stack ->
+            true
+
+        // NOTE: ;; does not terminate a 'namespace' body. 
+        | SEMICOLON_SEMICOLON, (CtxtSeqBlock _ :: CtxtNamespaceBody _ :: _) -> 
+            true
+
+        | SEMICOLON_SEMICOLON, (CtxtSeqBlock _ :: CtxtModuleBody (_,true) :: _) -> 
+            true
+
+        | t2           , (CtxtParen(t1,_) :: _) -> 
+            parenTokensBalance t1  t2
+
+        | _ -> 
+            false
               
     //----------------------------------------------------------------------------
     // Parse and transform the stream of tokens coming from popNextTokenTup, pushing
@@ -1109,52 +1148,12 @@ type LexFilterImpl (lightSyntaxStatus:LightSyntaxStatus, compilingFsLib, lexer, 
             | _ -> 
                 None
 
-
-        let tokenBalancesHeadContext token stack = 
-            match token,stack with 
-            | END, (CtxtWithAsAugment(_)  :: _)
-            | (ELSE | ELIF), (CtxtIf _ :: _)
-            | DONE         , (CtxtDo _ :: _)
-            // WITH balances except in the following contexts.... Phew - an overused keyword! 
-            | WITH         , (  ((CtxtMatch _ | CtxtException _ | CtxtMemberHead _ | CtxtInterfaceHead _ | CtxtTry _ | CtxtTypeDefns _ | CtxtMemberBody _)  :: _)
-                                    // This is the nasty record/object-expression case 
-                                    | (CtxtSeqBlock _ :: CtxtParen(LBRACE,_)  :: _) )
-            | FINALLY      , (CtxtTry _  :: _) -> 
-                true
-
-            // for x in ienum ... 
-            // let x = ... in
-            | IN           , ((CtxtFor _ | CtxtLetDecl _) :: _) ->
-                true
-            // 'query { join x in ys ... }'
-            // 'query { ... 
-            //          join x in ys ... }'
-            // 'query { for ... do
-            //          join x in ys ... }'
-            | IN           , stack when detectJoinInCtxt stack ->
-                true
-
-            // NOTE: ;; does not terminate a 'namespace' body. 
-            | SEMICOLON_SEMICOLON, (CtxtSeqBlock _ :: CtxtNamespaceBody _ :: _) -> 
-                true
-
-            | SEMICOLON_SEMICOLON, (CtxtSeqBlock _ :: CtxtModuleBody (_,true) :: _) -> 
-                true
-
-            | t2           , (CtxtParen(t1,_) :: _) -> 
-                parenTokensBalance t1  t2
-
-            | _ -> 
-                false
-
-        let rec suffixExists p l = match l with [] -> false | _::t -> p t || suffixExists p t
-
         // Balancing rule. Every 'in' terminates all surrounding blocks up to a CtxtLetDecl, and will be swallowed by 
         // terminating the corresponding CtxtLetDecl in the rule below. 
         // Balancing rule. Every 'done' terminates all surrounding blocks up to a CtxtDo, and will be swallowed by 
         // terminating the corresponding CtxtDo in the rule below. 
         let tokenForcesHeadContextClosure token stack = 
-            nonNil stack &&
+            not (List.isEmpty stack) &&
             match token with 
             | Parser.EOF _ -> true
             | SEMICOLON_SEMICOLON  -> not (tokenBalancesHeadContext token stack) 
@@ -1317,10 +1316,7 @@ type LexFilterImpl (lightSyntaxStatus:LightSyntaxStatus, compilingFsLib, lexer, 
         //  Applied when a token other then a long identifier is seen 
         | _, (CtxtNamespaceHead (namespaceTokenPos, prevToken) :: _) -> 
             match prevToken, token with 
-            | NAMESPACE, GLOBAL when namespaceTokenPos.Column < tokenStartPos.Column -> 
-                replaceCtxt tokenTup (CtxtNamespaceHead (namespaceTokenPos, token))
-                returnToken tokenLexbufState token
-            | (NAMESPACE | DOT), IDENT _ when namespaceTokenPos.Column < tokenStartPos.Column -> 
+            | (NAMESPACE | DOT | REC | GLOBAL), (REC | IDENT _ | GLOBAL) when namespaceTokenPos.Column < tokenStartPos.Column -> 
                 replaceCtxt tokenTup (CtxtNamespaceHead (namespaceTokenPos, token))
                 returnToken tokenLexbufState token
             | IDENT _, DOT when namespaceTokenPos.Column < tokenStartPos.Column -> 
@@ -1349,7 +1345,7 @@ type LexFilterImpl (lightSyntaxStatus:LightSyntaxStatus, compilingFsLib, lexer, 
                 returnToken tokenLexbufState token
             | MODULE, (PUBLIC | PRIVATE | INTERNAL) when moduleTokenPos.Column < tokenStartPos.Column -> 
                 returnToken tokenLexbufState token
-            | (MODULE | DOT), IDENT _ when moduleTokenPos.Column < tokenStartPos.Column -> 
+            | (MODULE | DOT | REC), (REC | IDENT _) when moduleTokenPos.Column < tokenStartPos.Column -> 
                 replaceCtxt tokenTup (CtxtModuleHead (moduleTokenPos, token))
                 returnToken tokenLexbufState token
             | IDENT _, DOT when moduleTokenPos.Column < tokenStartPos.Column -> 
@@ -2279,3 +2275,4 @@ type LexFilter (lightSyntaxStatus:LightSyntaxStatus, compilingFsLib, lexer, lexb
             | _ -> token
         loop()
 
+let token lexargs skip = Lexer.token lexargs skip

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Open Technologies, Inc.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 namespace Microsoft.FSharp.Core
 
@@ -11,18 +11,17 @@ namespace Microsoft.FSharp.Core
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     /// <summary>Basic operations on options.</summary>
     module Option =
-
         /// <summary>Returns true if the option is not None.</summary>
         /// <param name="option">The input option.</param>
         /// <returns>True if the option is not None.</returns>
         [<CompiledName("IsSome")>]
-        val isSome: option:'T option -> bool
+        val inline isSome: option:'T option -> bool
 
         /// <summary>Returns true if the option is None.</summary>
         /// <param name="option">The input option.</param>
         /// <returns>True if the option is None.</returns>
         [<CompiledName("IsNone")>]
-        val isNone: option:'T option -> bool
+        val inline isNone: option:'T option -> bool
 
         /// <summary>Gets the value associated with the option.</summary>
         /// <param name="option">The input option.</param>

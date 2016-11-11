@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Open Technologies, Inc.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 namespace Microsoft.FSharp.Collections
 
@@ -13,6 +13,14 @@ namespace Microsoft.FSharp.Collections
     [<RequireQualifiedAccess>]
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     module Seq = 
+
+        /// <summary>Returns a new sequence that contains the cartesian product of the two input sequences.</summary>
+        /// <param name="source1">The first sequence.</param>
+        /// <param name="source2">The second sequence.</param>
+        /// <returns>The result sequence.</returns>
+        /// <exception cref="System.ArgumentNullException">Thrown when either of the input sequences is null.</exception>
+        [<CompiledName("AllPairs")>]
+        val allPairs: source1:seq<'T1> -> source2:seq<'T2> -> seq<'T1 * 'T2>
 
         /// <summary>Wraps the two given enumerations as a single concatenated
         /// enumeration.</summary>
@@ -153,17 +161,16 @@ namespace Microsoft.FSharp.Collections
         [<CompiledName("Collect")>]
         val collect: mapping:('T -> 'Collection) -> source:seq<'T> -> seq<'U>  when 'Collection :> seq<'U>
 
-        /// <summary>Compares two sequences using the given comparison function, element by element.
-        /// Returns the first non-zero result from the comparison function.  If the end of a sequence
-        /// is reached it returns a -1 if the first sequence is shorter and a 1 if the second sequence
-        /// is shorter.</summary>
+        /// <summary>Compares two sequences using the given comparison function, element by element.</summary>
         ///
         /// <param name="comparer">A function that takes an element from each sequence and returns an int.
         /// If it evaluates to a non-zero value iteration is stopped and that value is returned.</param>
         /// <param name="source1">The first input sequence.</param>
         /// <param name="source2">The second input sequence.</param>
         ///
-        /// <returns>The first non-zero value from the comparison function.</returns>
+        /// <returns>Returns the first non-zero result from the comparison function.  If the end of a sequence
+        /// is reached it returns a -1 if the first sequence is shorter and a 1 if the second sequence
+        /// is shorter.</returns>
         ///
         /// <exception cref="System.ArgumentNullException">Thrown when either of the input sequences
         /// is null.</exception>
@@ -253,6 +260,7 @@ namespace Microsoft.FSharp.Collections
         /// <returns>The sequence split into chunks.</returns>
         /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null.</exception>
         /// <exception cref="System.ArgumentException">Thrown when <c>count</c> is not positive.</exception>
+        /// <remarks>This function consumes the whole input sequence before yielding the first element of the result sequence.</remarks>
         [<CompiledName("SplitInto")>]
         val splitInto: count:int -> source:seq<'T> -> seq<'T[]>
 
@@ -349,12 +357,12 @@ namespace Microsoft.FSharp.Collections
         [<CompiledName("Where")>]
         val where: predicate:('T -> bool) -> source:seq<'T> -> seq<'T>
 
-        /// <summary>Returns the first element for which the given function returns <c>true</c>.</summary>
+        /// <summary>Returns the first element for which the given function returns True.</summary>
         ///
         /// <param name="predicate">A function to test whether an item in the sequence should be returned.</param>
         /// <param name="source">The input sequence.</param>
         ///
-        /// <returns>The first element for which the predicate returns <c>true</c>.</returns>
+        /// <returns>The first element for which the predicate returns True.</returns>
         ///
         /// <exception cref="System.Collections.Generic.KeyNotFoundException">Thrown if no element returns true when
         /// evaluated by the predicate</exception>
@@ -362,24 +370,25 @@ namespace Microsoft.FSharp.Collections
         [<CompiledName("Find")>]
         val find: predicate:('T -> bool) -> source:seq<'T> -> 'T
 
-        /// <summary>Returns the last element for which the given function returns <c>true</c>.</summary>
+        /// <summary>Returns the last element for which the given function returns True.</summary>
         /// <remarks>This function digests the whole initial sequence as soon as it is called. As a
         /// result this function should not be used with large or infinite sequences.</remarks>
         /// <param name="predicate">A function to test whether an item in the sequence should be returned.</param>
         /// <param name="source">The input sequence.</param>
-        /// <returns>The last element for which the predicate returns <c>true</c>.</returns>
+        /// <returns>The last element for which the predicate returns True.</returns>
         /// <exception cref="System.Collections.Generic.KeyNotFoundException">Thrown if no element returns true when
         /// evaluated by the predicate</exception>
         /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null</exception>
+        /// <remarks>This function consumes the whole input sequence before returning the result.</remarks>
         [<CompiledName("FindBack")>]
         val findBack: predicate:('T -> bool) -> source:seq<'T> -> 'T
 
-        /// <summary>Returns the index of the first element for which the given function returns <c>true</c>.</summary>
+        /// <summary>Returns the index of the first element for which the given function returns True.</summary>
         ///
         /// <param name="predicate">A function to test whether the index of a particular element should be returned.</param>
         /// <param name="source">The input sequence.</param>
         ///
-        /// <returns>The index of the first element for which the predicate returns <c>true</c>.</returns>
+        /// <returns>The index of the first element for which the predicate returns True.</returns>
         ///
         /// <exception cref="System.Collections.Generic.KeyNotFoundException">Thrown if no element returns true when
         /// evaluated by the predicate</exception>
@@ -387,15 +396,16 @@ namespace Microsoft.FSharp.Collections
         [<CompiledName("FindIndex")>]
         val findIndex: predicate:('T -> bool) -> source:seq<'T> -> int
 
-        /// <summary>Returns the index of the last element for which the given function returns <c>true</c>.</summary>
+        /// <summary>Returns the index of the last element for which the given function returns True.</summary>
         /// <remarks>This function digests the whole initial sequence as soon as it is called. As a
         /// result this function should not be used with large or infinite sequences.</remarks>
         /// <param name="predicate">A function to test whether the index of a particular element should be returned.</param>
         /// <param name="source">The input sequence.</param>
-        /// <returns>The index of the last element for which the predicate returns <c>true</c>.</returns>
+        /// <returns>The index of the last element for which the predicate returns True.</returns>
         /// <exception cref="System.Collections.Generic.KeyNotFoundException">Thrown if no element returns true when
         /// evaluated by the predicate</exception>
         /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null</exception>
+        /// <remarks>This function consumes the whole input sequence before returning the result.</remarks>
         [<CompiledName("FindIndexBack")>]
         val findIndexBack: predicate:('T -> bool) -> source:seq<'T> -> int
 
@@ -435,6 +445,7 @@ namespace Microsoft.FSharp.Collections
         /// <param name="state">The initial state.</param>
         /// <returns>The state object after the folding function is applied to each element of the sequence.</returns>
         /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null.</exception>
+        /// <remarks>This function consumes the whole input sequence before returning the result.</remarks>
         [<CompiledName("FoldBack")>]
         val foldBack<'T,'State> : folder:('T -> 'State -> 'State) -> source:seq<'T> -> state:'State -> 'State
 
@@ -699,6 +710,7 @@ namespace Microsoft.FSharp.Collections
         /// <param name="array">The input collection.</param>
         /// <exception cref="System.ArgumentNullException">Thrown when the input collection is null.</exception>
         /// <returns>The collection of transformed elements, and the final accumulated value.</returns>
+        /// <remarks>This function consumes the whole input sequence before yielding the first element of the result sequence.</remarks>
         [<CompiledName("MapFold")>]
         val mapFold<'T,'State,'Result> : mapping:('State -> 'T -> 'Result * 'State) -> state:'State -> source:seq<'T> -> seq<'Result> * 'State
 
@@ -711,6 +723,7 @@ namespace Microsoft.FSharp.Collections
         /// <param name="state">The initial state.</param>
         /// <exception cref="System.ArgumentNullException">Thrown when the input collection is null.</exception>
         /// <returns>The collection of transformed elements, and the final accumulated value.</returns>
+        /// <remarks>This function consumes the whole input sequence before yielding the first element of the result sequence.</remarks>
         [<CompiledName("MapFoldBack")>]
         val mapFoldBack<'T,'State,'Result> : mapping:('T -> 'State -> 'Result * 'State) -> source:seq<'T> -> state:'State -> seq<'Result> * 'State
 
@@ -888,6 +901,7 @@ namespace Microsoft.FSharp.Collections
         ///
         /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null.</exception>
         /// <exception cref="System.ArgumentException">Thrown when indexMap does not produce a valid permutation.</exception>
+        /// <remarks>This function consumes the whole input sequence before yielding the first element of the result sequence.</remarks>
         [<CompiledName("Permute")>]
         val permute: indexMap:(int -> int) -> source:seq<'T> -> seq<'T>
 
@@ -950,6 +964,7 @@ namespace Microsoft.FSharp.Collections
         /// <returns>The final result of the reductions.</returns>
         /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null.</exception>
         /// <exception cref="System.ArgumentException">Thrown when the input sequence is empty.</exception>
+        /// <remarks>This function consumes the whole input sequence before returning the result.</remarks>
         [<CompiledName("ReduceBack")>]
         val reduceBack: reduction:('T -> 'T -> 'T) -> source:seq<'T> -> 'T
 
@@ -957,6 +972,7 @@ namespace Microsoft.FSharp.Collections
         /// <param name="source">The input sequence.</param>
         /// <returns>The reversed sequence.</returns>
         /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null.</exception>
+        /// <remarks>This function consumes the whole input sequence before yielding the first element of the reversed sequence.</remarks>
         [<CompiledName("Reverse")>]
         val rev: source:seq<'T> -> seq<'T>
 
@@ -981,6 +997,7 @@ namespace Microsoft.FSharp.Collections
         /// <param name="state">The initial state.</param>
         /// <returns>The resulting sequence of computed states.</returns>
         /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null.</exception>
+        /// <remarks>This function consumes the whole input sequence before yielding the first element of the result sequence.</remarks>
         [<CompiledName("ScanBack")>]
         val scanBack<'T,'State> : folder:('T -> 'State -> 'State) -> source:seq<'T> -> state:'State -> seq<'State>
 
@@ -1007,7 +1024,7 @@ namespace Microsoft.FSharp.Collections
         val skip: count:int -> source:seq<'T> -> seq<'T>
 
         /// <summary>Returns a sequence that, when iterated, skips elements of the underlying sequence while the 
-        /// given predicate returns <c>true</c>, and then yields the remaining elements of the sequence.</summary>
+        /// given predicate returns True, and then yields the remaining elements of the sequence.</summary>
         ///
         /// <param name="predicate">A function that evaluates an element of the sequence to a boolean value.</param>
         /// <param name="source">The input sequence.</param>
@@ -1032,6 +1049,7 @@ namespace Microsoft.FSharp.Collections
         /// <returns>The result sequence.</returns>
         ///
         /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null.</exception>
+        /// <remarks>This function consumes the whole input sequence before yielding the first element of the result sequence.</remarks>
         [<CompiledName("Sort")>]
         val sort : source:seq<'T> -> seq<'T> when 'T : comparison
 
@@ -1045,6 +1063,7 @@ namespace Microsoft.FSharp.Collections
         /// <param name="comparer">The function to compare the collection elements.</param>
         /// <param name="list">The input sequence.</param>
         /// <returns>The result sequence.</returns>
+        /// <remarks>This function consumes the whole input sequence before yielding the first element of the result sequence.</remarks>
         [<CompiledName("SortWith")>]
         val sortWith : comparer:('T -> 'T -> int) -> source:seq<'T> -> seq<'T>
 
@@ -1157,7 +1176,7 @@ namespace Microsoft.FSharp.Collections
         val take: count:int -> source:seq<'T> -> seq<'T>
 
         /// <summary>Returns a sequence that, when iterated, yields elements of the underlying sequence while the 
-        /// given predicate returns <c>true</c>, and then returns no further elements.</summary>
+        /// given predicate returns True, and then returns no further elements.</summary>
         ///
         /// <param name="predicate">A function that evaluates to false when no more items should be returned.</param>
         /// <param name="source">The input sequence.</param>
@@ -1188,26 +1207,27 @@ namespace Microsoft.FSharp.Collections
         [<CompiledName("ToList")>]
         val toList: source:seq<'T> -> 'T list
 
-        /// <summary>Returns the first element for which the given function returns <c>true</c>.
-        /// Return <c>None</c> if no such element exists.</summary>
+        /// <summary>Returns the first element for which the given function returns True.
+        /// Return None if no such element exists.</summary>
         ///
         /// <param name="predicate">A function that evaluates to a Boolean when given an item in the sequence.</param>
         /// <param name="source">The input sequence.</param>
         ///
-        /// <returns>The found element or <c>None</c>.</returns>
+        /// <returns>The found element or None.</returns>
         ///
         /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null.</exception>
         [<CompiledName("TryFind")>]
         val tryFind: predicate:('T -> bool) -> source:seq<'T> -> 'T option
 
-        /// <summary>Returns the last element for which the given function returns <c>true</c>.
-        /// Return <c>None</c> if no such element exists.</summary>
+        /// <summary>Returns the last element for which the given function returns True.
+        /// Return None if no such element exists.</summary>
         /// <remarks>This function digests the whole initial sequence as soon as it is called. As a
         /// result this function should not be used with large or infinite sequences.</remarks>
         /// <param name="predicate">A function that evaluates to a Boolean when given an item in the sequence.</param>
         /// <param name="source">The input sequence.</param>
-        /// <returns>The found element or <c>None</c>.</returns>
+        /// <returns>The found element or None.</returns>
         /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null.</exception>
+        /// <remarks>This function consumes the whole input sequence before returning the result.</remarks>
         [<CompiledName("TryFindBack")>]
         val tryFindBack: predicate:('T -> bool) -> source:seq<'T> -> 'T option
 
@@ -1217,7 +1237,7 @@ namespace Microsoft.FSharp.Collections
         /// <param name="predicate">A function that evaluates to a Boolean when given an item in the sequence.</param>
         /// <param name="source">The input sequence.</param>
         ///
-        /// <returns>The found index or <c>None</c>.</returns>
+        /// <returns>The found index or None.</returns>
         ///
         /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null.</exception>
         [<CompiledName("TryFindIndex")>]
@@ -1240,6 +1260,7 @@ namespace Microsoft.FSharp.Collections
         /// <param name="source">The input sequence.</param>
         /// <returns>The found index or <c>None</c>.</returns>
         /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null.</exception>
+        /// <remarks>This function consumes the whole input sequence before returning the result.</remarks>
         [<CompiledName("TryFindIndexBack")>]
         val tryFindIndexBack : predicate:('T -> bool) -> source:seq<'T> -> int option
 

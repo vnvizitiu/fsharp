@@ -11,8 +11,12 @@ repository at https://github.com/Microsoft/visualfsharp.  This ensures that the 
 packaging of F# on Windows (the Visual F# Tools) also includes any contributions that are made, and
 ensures that the versions do not diverge.
 
-If you are using Windows, you should fork that repo and contribute directly there. Your contributions will
+### Contributing on Windows
+
+If you are using Windows, you should fork the https://github.com/Microsoft/visualfsharp repo and contribute directly there. Your contributions will
 then be merged into this repo.
+
+### Contributing on Linux/OSX when using Mono
 
 If you are using Linux or OSX, you can prepare your contributions by forking this repository (the code is
 essentially the same). This will give you access to the cross-platform testing
@@ -49,7 +53,7 @@ This codebase uses the Apache 2.0 license.
 
 ## NuGet Feed of FSharp.Core and FSharp.Compiler.Tools packages
 
-This repo is curently used to make two NuGet pacakges - FSharp.Core and FSharp.Compiler.Tools.
+This repo is currently used to make two NuGet packages - FSharp.Core and FSharp.Compiler.Tools.
 
 Stable builds are available in the NuGet Gallery:
 [http://www.nuget.org/packages/FSharp.Core](http://www.nuget.org/packages/FSharp.Core) and [http://www.nuget.org/packages/FSharp.Compiler.Tools](http://www.nuget.org/packages/FSharp.Compiler.Tools).
@@ -132,7 +136,7 @@ This build the proto compiler, then the library, then the final compiler.
 You can also build these independently using:
 
     msbuild src\fsharp-proto-build.proj
-    ngen install ..\lib\proto\fsc-proto.exe
+    ngen install lib\proto\fsc-proto.exe
     msbuild src\fsharp-library-build.proj /p:Configuration=Release
     msbuild src\fsharp-compiler-build.proj /p:Configuration=Release
 
@@ -143,20 +147,14 @@ You can also build FSharp.Core.dll for other profiles:
     msbuild src\fsharp-library-build.proj /p:TargetFramework=portable7 /p:Configuration=Release
     msbuild src\fsharp-library-build.proj /p:TargetFramework=portable78 /p:Configuration=Release
     msbuild src\fsharp-library-build.proj /p:TargetFramework=portable259 /p:Configuration=Release
-    msbuild src\fsharp-library-build.proj /p:TargetFramework=sl5 /p:Configuration=Release
 
     msbuild src\fsharp-library-build.proj /p:TargetFramework=monodroid /p:Configuration=Release
     msbuild src\fsharp-library-build.proj /p:TargetFramework=monotouch /p:Configuration=Release
-    msbuild src\fsharp-library-build.proj /p:TargetFramework=net40-xna40-xbox360 /p:Configuration=Release
-
-You can also build the FSharp.Core and FSharp.Compiler.Silverlight.dll for Silverlight 5.0:
-
-    msbuild src\fsharp-library-build.proj /p:TargetFramework=sl5-compiler  /p:Configuration=Release
 
 Change to ``` /p:Configuration=Debug``` for debug binaries.
 
 Add ``` /p:FSharpCoreBackVersion=3.0``` to build a back version of FSharp.Core.dll with a
-version number suitable for use when building libaries that have usable with both F# 3.0 and F# 3.1 libraries.
+version number suitable for use when building libraries that have usable with both F# 3.0 and F# 3.1 libraries.
 
     msbuild src\fsharp-library-build.proj /p:TargetFramework=net20 /p:Configuration=Release /p:FSharpCoreBackVersion=3.0
     msbuild src\fsharp-library-build.proj /p:TargetFramework=net40 /p:Configuration=Release /p:FSharpCoreBackVersion=3.0
@@ -298,7 +296,7 @@ sudo make install
 Maintainers
 -----------
 
-Tha maintainers of this repository appointed by the F# Core Engineering Group are:
+The maintainers of this repository appointed by the F# Core Engineering Group are:
 
  - [Tomas Petricek](http://github.com/tpetricek), [Robin Neatherway](https://github.com/rneatherway)
  - with help and guidance from [Don Syme](http://github.com/dsyme), [Cameron Taggart](http://github.com/ctaggart), [Dave Thomas](http://github.com/7sharp9), [Jo Shields](http://github.com/directhex), [Lincoln Atkinson](http://github.com/latkin), [Kevin Ransom](http://github.com/KevinRansom) and [Henrik Feldt](http://github.com/haf)
