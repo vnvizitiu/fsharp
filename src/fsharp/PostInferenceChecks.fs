@@ -5,14 +5,12 @@
 module internal Microsoft.FSharp.Compiler.PostTypeCheckSemanticChecks
 
 open System.Collections.Generic
-open Internal.Utilities
 
 open Microsoft.FSharp.Compiler
 open Microsoft.FSharp.Compiler.AbstractIL
 open Microsoft.FSharp.Compiler.AbstractIL.IL
 open Microsoft.FSharp.Compiler.AbstractIL.Internal
 open Microsoft.FSharp.Compiler.AbstractIL.Internal.Library
-open Microsoft.FSharp.Compiler.AbstractIL.Diagnostics
 
 open Microsoft.FSharp.Compiler.AccessibilityLogic
 open Microsoft.FSharp.Compiler.Ast
@@ -22,7 +20,6 @@ open Microsoft.FSharp.Compiler.Tast
 open Microsoft.FSharp.Compiler.Tastops
 open Microsoft.FSharp.Compiler.TcGlobals
 open Microsoft.FSharp.Compiler.Lib
-open Microsoft.FSharp.Compiler.Layout
 open Microsoft.FSharp.Compiler.Infos
 open Microsoft.FSharp.Compiler.PrettyNaming
 open Microsoft.FSharp.Compiler.InfoReader
@@ -113,7 +110,7 @@ let testHookMemberBody (membInfo: ValMemberInfo) (expr:Expr) =
 //      For correctness, this claim needs to be justified.
 //      
 //      Q:  Do any post check rewrite passes factor expressions out to other functions?      
-//      A1. The optimiser may introduce auxillary functions, e.g. by splitting out match-branches.
+//      A1. The optimiser may introduce auxiliary functions, e.g. by splitting out match-branches.
 //          This should not be done if the refactored body contains an unbound reraise.
 //      A2. TLR? Are any expression factored out into functions?
 //      
@@ -140,7 +137,9 @@ type env =
       /// Are we in a quotation?
       quote : bool 
       /// Are we under [<ReflectedDefinition>]?
-      reflect : bool } 
+      reflect : bool
+      /// Are we in an extern declaration?
+      external : bool } 
 
 let BindTypar env (tp:Typar) = 
     { env with 
@@ -149,12 +148,12 @@ let BindTypar env (tp:Typar) =
 
 let BindTypars g env (tps:Typar list) = 
     let tps = NormalizeDeclaredTyparsForEquiRecursiveInference g tps
-    if List.isEmpty tps then env else
+    if isNil tps then env else
     // Here we mutate to provide better names for generalized type parameters 
     let nms = PrettyTypes.PrettyTyparNames (fun _ -> true) env.boundTyparNames tps
     (tps,nms) ||> List.iter2 (fun tp nm -> 
             if PrettyTypes.NeedsPrettyTyparName tp  then 
-                tp.Data.typar_id <- ident (nm,tp.Range))      
+                tp.typar_id <- ident (nm,tp.Range))      
     List.fold BindTypar env tps 
 
 /// Set the set of vals which are arguments in the active lambda. We are allowed to return 
@@ -178,11 +177,12 @@ type cenv =
       mutable usesQuotations : bool
       mutable entryPointGiven:bool  }
 
-let BindVal cenv (v:Val) = 
+let BindVal cenv env (v:Val) = 
     //printfn "binding %s..." v.DisplayName
     let alreadyDone = cenv.boundVals.ContainsKey v.Stamp
     cenv.boundVals.[v.Stamp] <- 1
-    if not alreadyDone &&
+    if not env.external &&
+       not alreadyDone &&
        cenv.reportErrors && 
        not v.HasBeenReferenced && 
        not v.IsCompiledAsTopLevel && 
@@ -195,7 +195,7 @@ let BindVal cenv (v:Val) =
         | _ -> 
             warning (Error(FSComp.SR.chkUnusedValue v.DisplayName, v.Range))
 
-let BindVals cenv vs = List.iter (BindVal cenv) vs
+let BindVals cenv env vs = List.iter (BindVal cenv env) vs
 
 //--------------------------------------------------------------------------
 // approx walk of type
@@ -529,7 +529,7 @@ and CheckExpr (cenv:cenv) (env:env) expr (context:ByrefContext) =
 
     | Expr.Let (bind,body,_,_) ->  
         CheckBinding cenv env false bind  
-        BindVal cenv bind.Var
+        BindVal cenv env bind.Var
         CheckExpr cenv env body context
 
     | Expr.Const (_,m,ty) -> 
@@ -700,7 +700,7 @@ and CheckExpr (cenv:cenv) (env:env) expr (context:ByrefContext) =
         CheckDecisionTreeTargets cenv env targets context
 
     | Expr.LetRec (binds,e,_,_) ->  
-        BindVals cenv (valsOfBinds binds)
+        BindVals cenv env (valsOfBinds binds)
         CheckBindings cenv env binds
         CheckExprNoByrefs cenv env e
 
@@ -943,7 +943,7 @@ and CheckLambdas isTop (memInfo: ValMemberInfo option) cenv env inlined topValIn
             restArgs |> List.iter (fun arg -> if isByrefTy cenv.g arg.Type then arg.SetHasBeenReferenced())
 
         syntacticArgs |> List.iter (CheckValSpec cenv env)
-        syntacticArgs |> List.iter (BindVal cenv)
+        syntacticArgs |> List.iter (BindVal cenv env)
 
         // Trigger a test hook
         match memInfo with 
@@ -957,7 +957,7 @@ and CheckLambdas isTop (memInfo: ValMemberInfo option) cenv env inlined topValIn
         CheckNoReraise cenv freesOpt body 
 
         // Check the body of the lambda
-        if (not (List.isEmpty tps) || not (List.isEmpty vsl)) && isTop && not cenv.g.compilingFslib && isByrefTy cenv.g bodyty then
+        if (not (isNil tps) || not (isNil vsl)) && isTop && not cenv.g.compilingFslib && isByrefTy cenv.g bodyty then
             // allow byref to occur as return position for byref-typed top level function or method 
             CheckExprPermitByrefReturn cenv env body
         else
@@ -965,7 +965,7 @@ and CheckLambdas isTop (memInfo: ValMemberInfo option) cenv env inlined topValIn
 
         // Check byref return types
         if cenv.reportErrors then 
-            if (not inlined && (List.isEmpty tps && List.isEmpty vsl)) || not isTop then
+            if (not inlined && (isNil tps && isNil vsl)) || not isTop then
                 CheckForByrefLikeType cenv env bodyty (fun () -> 
                         errorR(Error(FSComp.SR.chkFirstClassFuncNoByref(), m)))
 
@@ -1014,7 +1014,7 @@ and CheckDecisionTreeTargets cenv env targets context =
     targets |> Array.iter (CheckDecisionTreeTarget cenv env context) 
 
 and CheckDecisionTreeTarget cenv env context (TTarget(vs,e,_)) = 
-    BindVals cenv vs 
+    BindVals cenv env vs 
     vs |> List.iter (CheckValSpec cenv env)
     CheckExpr cenv env e context 
 
@@ -1031,12 +1031,12 @@ and CheckDecisionTreeSwitch cenv env (e,cases,dflt,m) =
 
 and CheckDecisionTreeTest cenv env m discrim =
     match discrim with
-    | Test.UnionCase (_,tinst) -> CheckTypeInstPermitByrefs cenv env m tinst
-    | Test.ArrayLength (_,typ) -> CheckTypePermitByrefs cenv env m typ
-    | Test.Const _ -> ()
-    | Test.IsNull -> ()
-    | Test.IsInst (srcTyp,dstTyp)    -> CheckTypePermitByrefs cenv env m srcTyp; CheckTypePermitByrefs cenv env m dstTyp
-    | Test.ActivePatternCase (exp,_,_,_,_)     -> CheckExprNoByrefs cenv env exp
+    | DecisionTreeTest.UnionCase (_,tinst) -> CheckTypeInstPermitByrefs cenv env m tinst
+    | DecisionTreeTest.ArrayLength (_,typ) -> CheckTypePermitByrefs cenv env m typ
+    | DecisionTreeTest.Const _ -> ()
+    | DecisionTreeTest.IsNull -> ()
+    | DecisionTreeTest.IsInst (srcTyp,dstTyp)    -> CheckTypePermitByrefs cenv env m srcTyp; CheckTypePermitByrefs cenv env m dstTyp
+    | DecisionTreeTest.ActivePatternCase (exp,_,_,_,_)     -> CheckExprNoByrefs cenv env exp
 
 and CheckAttrib cenv env (Attrib(_,_,args,props,_,_,_)) = 
     props |> List.iter (fun (AttribNamedArg(_,_,_,expr)) -> CheckAttribExpr cenv env expr)
@@ -1091,7 +1091,7 @@ and CheckAttribArgExpr cenv env expr =
            errorR (Error (FSComp.SR.chkInvalidCustAttrVal(), expr.Range))
   
 and CheckAttribs cenv env (attribs: Attribs) = 
-    if List.isEmpty attribs then () else
+    if isNil attribs then () else
     let tcrefs = [ for (Attrib(tcref,_,_,_,_,_,m)) in attribs -> (tcref,m) ]
 
     // Check for violations of allowMultiple = false
@@ -1135,6 +1135,8 @@ and AdjustAccess isHidden (cpath: unit -> CompilationPath) access =
 and CheckBinding cenv env alwaysCheckNoReraise (TBind(v,bindRhs,_) as bind) =
     let isTop = Option.isSome bind.Var.ValReprInfo
     //printfn "visiting %s..." v.DisplayName
+
+    let env = { env with external = env.external || cenv.g.attrib_DllImportAttribute |> Option.exists (fun attr -> HasFSharpAttribute cenv.g attr v.Attribs) }
 
     // Check that active patterns don't have free type variables in their result
     match TryGetActivePatternInfo (mkLocalValRef v) with 
@@ -1190,7 +1192,7 @@ and CheckBinding cenv env alwaysCheckNoReraise (TBind(v,bindRhs,_) as bind) =
 
                 // If we've already recorded a definition then skip this 
                 match v.ReflectedDefinition with 
-                | None -> v.Data.val_defn <- Some bindRhs
+                | None -> v.val_defn <- Some bindRhs
                 | Some _ -> ()
                 // Run the conversion process over the reflected definition to report any errors in the
                 // front end rather than the back end. We currently re-run this during ilxgen.fs but there's
@@ -1206,7 +1208,7 @@ and CheckBinding cenv env alwaysCheckNoReraise (TBind(v,bindRhs,_) as bind) =
                     let qscope = QuotationTranslator.QuotationGenerationScope.Create (cenv.g,cenv.amap,cenv.viewCcu, QuotationTranslator.IsReflectedDefinition.Yes) 
                     QuotationTranslator.ConvExprPublic qscope env taue  |> ignore
                     let _,_,argExprs = qscope.Close()
-                    if not (List.isEmpty argExprs) then 
+                    if not (isNil argExprs) then 
                         errorR(Error(FSComp.SR.chkReflectedDefCantSplice(), v.Range))
                     QuotationTranslator.ConvMethodBase qscope env (v.CompiledName, v) |> ignore
                 with 
@@ -1451,14 +1453,14 @@ let CheckEntityDefn cenv env (tycon:Entity) =
 
             if others |> List.exists (checkForDup EraseAll) then 
                 if others |> List.exists (checkForDup EraseNone) then 
-                    errorR(Error(FSComp.SR.chkDuplicateMethod(nm),m))
+                    errorR(Error(FSComp.SR.chkDuplicateMethod(nm, NicePrint.minimalStringOfType cenv.denv typ),m))
                 else
-                    errorR(Error(FSComp.SR.chkDuplicateMethodWithSuffix(nm),m))
+                    errorR(Error(FSComp.SR.chkDuplicateMethodWithSuffix(nm, NicePrint.minimalStringOfType cenv.denv typ),m))
 
             let numCurriedArgSets = minfo.NumArgs.Length
 
             if numCurriedArgSets > 1 && others |> List.exists (fun minfo2 -> not (IsAbstractDefaultPair2 minfo minfo2)) then 
-                errorR(Error(FSComp.SR.chkDuplicateMethodCurried nm,m))
+                errorR(Error(FSComp.SR.chkDuplicateMethodCurried(nm, NicePrint.minimalStringOfType cenv.denv typ),m))
 
             if numCurriedArgSets > 1 && 
                (minfo.GetParamDatas(cenv.amap, m, minfo.FormalMethodInst) 
@@ -1493,15 +1495,18 @@ let CheckEntityDefn cenv env (tycon:Entity) =
             
         for pinfo in immediateProps do
             let nm = pinfo.PropertyName
-            let m = (match pinfo.ArbitraryValRef with None -> m | Some vref -> vref.DefinitionRange)
-            if hashOfImmediateMeths.ContainsKey(nm) then 
-                errorR(Error(FSComp.SR.chkPropertySameNameMethod(nm),m))
+            let m = 
+                match pinfo.ArbitraryValRef with 
+                | None -> m 
+                | Some vref -> vref.DefinitionRange
+
+            if hashOfImmediateMeths.ContainsKey nm then 
+                errorR(Error(FSComp.SR.chkPropertySameNameMethod(nm, NicePrint.minimalStringOfType cenv.denv typ),m))
+
             let others = getHash hashOfImmediateProps nm
 
-            if pinfo.HasGetter && pinfo.HasSetter then 
-
-                if (pinfo.GetterMethod.IsVirtual <>  pinfo.SetterMethod.IsVirtual) then 
-                    errorR(Error(FSComp.SR.chkGetterSetterDoNotMatchAbstract(nm),m))
+            if pinfo.HasGetter && pinfo.HasSetter && pinfo.GetterMethod.IsVirtual <> pinfo.SetterMethod.IsVirtual then 
+                errorR(Error(FSComp.SR.chkGetterSetterDoNotMatchAbstract(nm, NicePrint.minimalStringOfType cenv.denv typ),m))
 
             let checkForDup erasureFlag pinfo2 =                         
                   // abstract/default pairs of duplicate properties are OK
@@ -1513,9 +1518,9 @@ let CheckEntityDefn cenv env (tycon:Entity) =
 
             if others |> List.exists (checkForDup EraseAll) then
                 if others |> List.exists (checkForDup EraseNone) then 
-                    errorR(Error(FSComp.SR.chkDuplicateProperty(nm) ,m))
+                    errorR(Error(FSComp.SR.chkDuplicateProperty(nm, NicePrint.minimalStringOfType cenv.denv typ) ,m))
                 else
-                    errorR(Error(FSComp.SR.chkDuplicatePropertyWithSuffix(nm) ,m))
+                    errorR(Error(FSComp.SR.chkDuplicatePropertyWithSuffix(nm, NicePrint.minimalStringOfType cenv.denv typ) ,m))
             // Check to see if one is an indexer and one is not
 
             if ( (pinfo.HasGetter && 
@@ -1525,9 +1530,9 @@ let CheckEntityDefn cenv env (tycon:Entity) =
                   setterArgs.Length <> getterArgs.Length)
                 || 
                  (let nargs = pinfo.GetParamTypes(cenv.amap,m).Length
-                  others |> List.exists (fun pinfo2 -> (pinfo2.GetParamTypes(cenv.amap,m).Length = 0) <> (nargs = 0)))) then 
+                  others |> List.exists (fun pinfo2 -> (isNil(pinfo2.GetParamTypes(cenv.amap,m))) <> (nargs = 0)))) then 
                   
-                  errorR(Error(FSComp.SR.chkPropertySameNameIndexer(nm),m))
+                  errorR(Error(FSComp.SR.chkPropertySameNameIndexer(nm, NicePrint.minimalStringOfType cenv.denv typ),m))
 
             // Check to see if the signatures of the both getter and the setter imply the same property type
 
@@ -1669,13 +1674,13 @@ and CheckDefnInModule cenv env x =
     match x with 
     | TMDefRec(isRec,tycons,mspecs,m) -> 
         CheckNothingAfterEntryPoint cenv m
-        if isRec then BindVals cenv (allValsOfModDef x |> Seq.toList)
+        if isRec then BindVals cenv env (allValsOfModDef x |> Seq.toList)
         CheckEntityDefns cenv env tycons
         List.iter (CheckModuleSpec cenv env) mspecs
     | TMDefLet(bind,m)  -> 
         CheckNothingAfterEntryPoint cenv m
         CheckModuleBinding cenv env bind 
-        BindVal cenv bind.Var
+        BindVal cenv env bind.Var
     | TMDefDo(e,m)  -> 
         CheckNothingAfterEntryPoint cenv m
         CheckNoReraise cenv None e
@@ -1686,7 +1691,7 @@ and CheckDefnInModule cenv env x =
 and CheckModuleSpec cenv env x =
     match x with 
     | ModuleOrNamespaceBinding.Binding bind ->
-        BindVals cenv (valsOfBinds [bind])
+        BindVals cenv env (valsOfBinds [bind])
         CheckModuleBinding cenv env bind
     | ModuleOrNamespaceBinding.Module (mspec, rhs) ->
         CheckEntityDefn cenv env mspec
@@ -1726,7 +1731,8 @@ let CheckTopImpl (g,amap,reportErrors,infoReader,internalsVisibleToPaths,viewCcu
           boundTyparNames=[]
           argVals = ValMap.Empty
           boundTypars= TyparMap.Empty
-          reflect=false }
+          reflect=false
+          external=false }
 
     CheckModuleExpr cenv env mexpr
     CheckAttribs cenv env extraAttribs

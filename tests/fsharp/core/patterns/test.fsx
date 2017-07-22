@@ -3,9 +3,12 @@
  * Initially just some tests related to top-level let-pattern bug.
  * Later regression tests that patterns do project out the bits expected?
  *)
-#if ALL_IN_ONE
+#if TESTS_AS_APP
 module Core_patterns
 #endif
+
+open System
+open System.Reflection
 
 #light
 
@@ -26,20 +29,6 @@ let check s x1 x2 =
         stderr.WriteLine ("test "+s+": ok")
     else 
         report_failure(s)
-
-#if NetCore
-#else
-let argv = System.Environment.GetCommandLineArgs() 
-let SetCulture() = 
-  if argv.Length > 2 && argv.[1] = "--culture" then  begin
-    let cultureString = argv.[2] in 
-    let culture = new System.Globalization.CultureInfo(cultureString) in 
-    stdout.WriteLine ("Running under culture "+culture.ToString()+"...");
-    System.Threading.Thread.CurrentThread.CurrentCulture <-  culture
-  end 
-  
-do SetCulture()    
-#endif
 
 (* What kinds of top-leval let patterns are possible? *)
 
@@ -203,6 +192,7 @@ end
 module System_Type_Example2 = begin
 
     open System
+    open System.Reflection
     
     let (|Named|Array|ByRef|Ptr|Param|) (typ : System.Type) =
         if typ.IsGenericType        then Named(typ.GetGenericTypeDefinition(), typ.GetGenericArguments())
@@ -695,8 +685,7 @@ module Combinator_Examples = begin
 
 end
 
-#if Portable
-#else
+#if !FX_PORTABLE_OR_NETSTANDARD
 module XmlPattern_Examples = begin
 
 
@@ -795,7 +784,7 @@ module RegExp =
     check "fwhin3op9" ((|Match|_|) "^.*.ml$" "abc.ml") (Some [])
 
     let testFun() = 
-        File.WriteAllLines("test.fs", seq { for (IsMatch "(.*).fs" f) in allFiles System.Environment.CurrentDirectory do yield! "-------------------------------" :: "\n" :: "\n" :: ("// FILE: "+f) :: "" :: "module "+(f |> Path.GetDirectoryName |> Path.GetFileName |> (fun s -> s.ToUpper()))+ " =" :: [ for line in Array.toList (File.ReadAllLines(f)) -> "    "+line ] } |> Seq.toArray)
+        File.WriteAllLines("test.fs", seq { for (IsMatch "(.*).fs" f) in allFiles (System.IO.Directory.GetCurrentDirectory()) do yield! "-------------------------------" :: "\n" :: "\n" :: ("// FILE: "+f) :: "" :: "module "+(f |> Path.GetDirectoryName |> Path.GetFileName |> (fun s -> s.ToUpper()))+ " =" :: [ for line in Array.toList (File.ReadAllLines(f)) -> "    "+line ] } |> Seq.toArray)
 
 module RandomWalk = 
     let ran = new System.Random()
@@ -824,8 +813,7 @@ module RandomTEst =
     type IEvenCooler =
         inherit ICool
     
-#if Portable
-#else
+#if !FX_PORTABLE_OR_NETSTANDARD
 module RandomCodeFragment = 
     open System
 
@@ -1230,10 +1218,103 @@ module StructUnionMultiCaseLibDefns =
       /// <summary>Choice 7 of 7 choices</summary>
       | Choice7Of7 of Item7: 'T7
 
+module StructUnionsWithConflictingConstructors = 
+
+    [<StructuralEquality; StructuralComparison>]
+    [<RequireQualifiedAccess>]
+    [<Struct>]
+    type StructChoice = 
+      | Choice1Of2 of Item1: double
+      | Choice2Of2 of Item2: double
+    
+    [<StructuralEquality; StructuralComparison>]
+    [<RequireQualifiedAccess>]
+    [<Struct>]
+    type StructChoice3 = 
+      | Choice1Of3 of Item1: double
+      | Choice2Of3 of Item2: double
+      | Choice3Of3 of Item3: double
+    
+    [<StructuralEquality; StructuralComparison>]
+    [<RequireQualifiedAccess>]
+    [<Struct>]
+    type StructChoice4 = 
+      | Choice1Of4 of Item1: int
+      | Choice2Of4 of Item2: int
+      | Choice3Of4 of Item3: int
+      | Choice4Of4 of Item4: float
+    
+    [<StructuralEquality; StructuralComparison>]
+    [<RequireQualifiedAccess>]
+    [<Struct>]
+    type StructChoice5 = 
+      | Choice1Of5 of Item1: string
+      | Choice2Of5 of Item2: string
+      | Choice3Of5 of Item3: string
+      | Choice4Of5 of Item4: string
+      | Choice5Of5 of Item5: string
+    
+    [<StructuralEquality; StructuralComparison>]
+    [<RequireQualifiedAccess>]
+    [<Struct>]
+    type StructChoice6<'T1> = 
+      | Choice1Of6 of Item1: 'T1 
+      | Choice2Of6 of Item2: 'T1
+      | Choice3Of6 of Item3: 'T1
+      | Choice4Of6 of Item4: 'T1
+      | Choice5Of6 of Item5: 'T1
+      | Choice6Of6 of Item6: 'T1
+    
+    [<StructuralEquality; StructuralComparison>]
+    [<RequireQualifiedAccess>]
+    [<Struct>]
+    type StructChoice7 = 
+      | Choice1Of7 of Item1: byte 
+      | Choice2Of7 of Item2: byte
+      | Choice3Of7 of Item3: byte
+      | Choice4Of7 of Item4: byte
+      | Choice5Of7 of Item5: byte
+      | Choice6Of7 of Item6: byte
+      | Choice7Of7 of Item7: byte
+
+module StructUnionMarshalingBug = 
+    [<Struct>]
+    type Msg0 = 
+      | Zero of key :int
+
+    [<Struct>]
+    type Msg1 = 
+      | One of name :string
+      | Two of key :int
+
+    [<Struct>]
+    type Msg2 = 
+      { name :string
+        key :int
+        tag :int }
+
+    open System.Runtime.InteropServices
+
+    let msg0 = Zero 42
+    let size0 = Marshal.SizeOf(msg0)  
+    check "clcejefdw" size0 (sizeof<int>)
+
+    let msg1 = Two 42
+    let size1 = Marshal.SizeOf(msg1)  
+    check "clcejefdw2" size1 (sizeof<string> + 2*sizeof<int>) // this size may be bigger than expected
+
+    let msg2 = { name = null; key = 42; tag=1 }
+    let size2 = Marshal.SizeOf(msg2)  
+    check "clceje" size2 (sizeof<string> + 2*sizeof<int>)
+
+    // ... alternately ...
+    let buffer = Marshal.AllocHGlobal(64) // HACK: just assumed a much larger size
+    Marshal.StructureToPtr<Msg1>(msg1, buffer, false) 
+
 (* check for failure else sign off "ok" *)
 
 
-#if ALL_IN_ONE
+#if TESTS_AS_APP
 let RUN() = !failures
 #else
 let aa =

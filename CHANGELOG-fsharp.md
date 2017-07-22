@@ -1,3 +1,53 @@
+4.1.24
+  * Build using Mono 5.0 and msbuild
+
+4.1.23
+  * Fix nuget package for FSharp.Compiler.Tools System.ValueTuple.dll
+
+4.1.21
+  * Fix nuget package for FSharp.Compiler.Tools
+
+4.1.19
+  * Integrate changes from visualfsharp
+
+4.1.15
+  * fix regression on binding redirects for System.Collections.Immutable
+
+4.1.10
+  * Integrate visualfsharp to 55ffe91
+
+4.1.9
+  * Fix duplicate resources on OSX
+
+4.1.8
+  * [Fix regression in Microsoft.Build.FSharp.targets](https://github.com/fsharp/fsharp/pull/707)
+
+4.1.7
+  * [fix binding redirects for System.Collections.Immutable](https://github.com/fsharp/fsharp/issues/699)
+
+4.1.6
+  * fix version of library going in /usr/lib/mono/fsharp
+
+4.1.4
+  * [align fsc task and target file](https://github.com/fsharp/fsharp/pull/690)
+  * [use install layout that includes mono/fsharp](https://github.com/fsharp/fsharp/pull/689)
+  * [fix F# Intereactive on Mono 4.9+](https://github.com/fsharp/fsharp/pull/687)
+
+4.1.1
+  * Update compiler tools
+
+4.1.0.2
+  * Include DiaSymReader DLLs in nuget package
+
+4.1.0.0
+  * Updates to FSharp.Core nuget package for F# 4.1
+
+4.0.1.21
+  * Fix [#656](https://github.com/fsharp/fsharp/issues/656)  - error FS0193: internal error: No access to the given key
+
+4.0.1.20
+  * Fix #639 - Problems with F# scripts on Mono 
+
 4.0.1.19
   * Fix FSharp.Compiler.Tools targets for .NET Core usage
 

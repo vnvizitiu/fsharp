@@ -532,8 +532,7 @@ namespace System
 #if TUPLE_STRUXT
     // NOTE: Tuple`2 is a struct type. 
     // WARNING: If you change additional tuple types to be structs then you must change 'highestTupleStructType' in tastops.ml
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
     [<DebuggerDisplay("({Item1},{Item2})")>]
 #endif
     [<Struct>]
@@ -550,8 +549,7 @@ namespace System
         interface IComparable 
 #endif
 
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
     [<DebuggerDisplay("({Item1},{Item2},{Item3})")>]
 #endif
     type Tuple<'T1,'T2,'T3>(t1:'T1,t2:'T2,t3:'T3) =       
@@ -562,8 +560,7 @@ namespace System
         interface IStructuralEquatable 
         interface IComparable 
 
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
     [<DebuggerDisplay("({Item1},{Item2},{Item3},{Item4})")>]
 #endif
     type Tuple<'T1,'T2,'T3,'T4>(t1:'T1,t2:'T2,t3:'T3,t4:'T4) = 
@@ -575,8 +572,7 @@ namespace System
         interface IStructuralEquatable 
         interface IComparable 
 
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
     [<DebuggerDisplay("({Item1},{Item2},{Item3},{Item4},{Item5})")>]
 #endif
     type Tuple<'T1,'T2,'T3,'T4,'T5>(t1:'T1,t2:'T2,t3:'T3,t4:'T4,t5:'T5) = 
@@ -589,8 +585,7 @@ namespace System
         interface IStructuralEquatable 
         interface IComparable 
 
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
     [<DebuggerDisplay("({Item1},{Item2},{Item3},{Item4},{Item5},{Item6})")>]
 #endif
     type Tuple<'T1,'T2,'T3,'T4,'T5,'T6>(t1:'T1,t2:'T2,t3:'T3,t4:'T4,t5:'T5,t6:'T6) = 
@@ -604,8 +599,7 @@ namespace System
         interface IStructuralEquatable 
         interface IComparable 
 
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
     [<DebuggerDisplay("({Item1},{Item2},{Item3},{Item4},{Item5},{Item6},{Item7})")>]
 #endif
     type Tuple<'T1,'T2,'T3,'T4,'T5,'T6,'T7>(t1:'T1,t2:'T2,t3:'T3,t4:'T4,t5:'T5,t6:'T6,t7:'T7) = 
@@ -620,8 +614,7 @@ namespace System
         interface IStructuralEquatable 
         interface IComparable 
             
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
     [<DebuggerDisplay("({Item1},{Item2},{Item3},{Item4},{Item5},{Item6},{Item7},{Rest})")>]
 #endif
     type Tuple<'T1,'T2,'T3,'T4,'T5,'T6,'T7,'TRest>(t1:'T1,t2:'T2,t3:'T3,t4:'T4,t5:'T5,t6:'T6,t7:'T7,rest:'TRest) = 
@@ -652,7 +645,7 @@ namespace Microsoft.FSharp.Core
     open Microsoft.FSharp.Core.BasicInlinedOperations
 
     //-------------------------------------------------------------------------
-    // The main aim here is to bootsrap the definition of structural hashing 
+    // The main aim here is to bootstrap the definition of structural hashing 
     // and comparison.  Calls to these form part of the auto-generated 
     // code for each new datatype.
 
@@ -748,7 +741,7 @@ namespace Microsoft.FSharp.Core
                // Compute an on-demand per-instantiation static field
                static let info = getTypeInfo typeof<'T>
 
-               // Publish the results of that compuation
+               // Publish the results of that computation
                static member TypeInfo = info
                          
 
@@ -907,7 +900,7 @@ namespace Microsoft.FSharp.Core
         module HashCompare = 
         
             //-------------------------------------------------------------------------
-            // LangaugePrimitives.HashCompare: Physical Equality
+            // LanguagePrimitives.HashCompare: Physical Equality
             //------------------------------------------------------------------------- 
 
             // NOTE: compiler/optimizer is aware of this function and optimizes calls to it in many situations
@@ -930,7 +923,7 @@ namespace Microsoft.FSharp.Core
 
 
             //-------------------------------------------------------------------------
-            // LangaugePrimitives.HashCompare: Comparison
+            // LanguagePrimitives.HashCompare: Comparison
             //
             // Bi-modal generic comparison helper implementation.
             //
@@ -1387,7 +1380,7 @@ namespace Microsoft.FSharp.Core
 
 
             //-------------------------------------------------------------------------
-            // LangaugePrimitives.HashCompare: EQUALITY
+            // LanguagePrimitives.HashCompare: EQUALITY
             //------------------------------------------------------------------------- 
 
 
@@ -1781,7 +1774,7 @@ namespace Microsoft.FSharp.Core
 
 
             //-------------------------------------------------------------------------
-            // LangaugePrimitives.HashCompare: HASHING.  
+            // LanguagePrimitives.HashCompare: HASHING.  
             //------------------------------------------------------------------------- 
 
 
@@ -3403,16 +3396,14 @@ namespace Microsoft.FSharp.Core
     // Refs
     //-------------------------------------------------------------------------
 
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
     [<DebuggerDisplay("{contents}")>]
 #endif
     [<StructuralEquality; StructuralComparison>]
     [<CompiledName("FSharpRef`1")>]
     type Ref<'T> = 
         { 
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
           [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
 #endif
           mutable contents: 'T }
@@ -3427,8 +3418,7 @@ namespace Microsoft.FSharp.Core
     //-------------------------------------------------------------------------
 
     [<DefaultAugmentation(false)>]
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
     [<DebuggerDisplay("Some({Value})")>]
 #endif
     [<CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)>]
@@ -3442,20 +3432,17 @@ namespace Microsoft.FSharp.Core
         [<CompilationRepresentation(CompilationRepresentationFlags.Instance)>]
         member x.Value = match x with Some x -> x | None -> raise (new System.InvalidOperationException("Option.Value"))
 
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
         [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
 #endif
         member x.IsNone = match x with None -> true | _ -> false
 
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
         [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
 #endif
         member x.IsSome = match x with Some _ -> true | _ -> false
 
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
         [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
 #endif
         static member None : 'T option = None
@@ -3496,12 +3483,10 @@ namespace Microsoft.FSharp.Collections
     open Microsoft.FSharp.Core.BasicInlinedOperations
 
     [<DefaultAugmentation(false)>]
-#if FX_NO_DEBUG_PROXIES
-#else
+#if !FX_NO_DEBUG_PROXIES
     [<System.Diagnostics.DebuggerTypeProxyAttribute(typedefof<ListDebugView<_>>)>]
 #endif
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
     [<DebuggerDisplay("{DebugDisplay,nq}")>]
 #endif
     [<CodeAnalysis.SuppressMessage("Microsoft.Naming", "CA1710:IdentifiersShouldHaveCorrectSuffix")>]
@@ -3512,6 +3497,10 @@ namespace Microsoft.FSharp.Collections
        | (::)  : Head: 'T * Tail: 'T list -> 'T list
        interface System.Collections.Generic.IEnumerable<'T>
        interface System.Collections.IEnumerable
+
+#if !FSCORE_PORTABLE_OLD
+       interface System.Collections.Generic.IReadOnlyCollection<'T>
+#endif
         
     and 'T list = List<'T>
 
@@ -3528,8 +3517,7 @@ namespace Microsoft.FSharp.Collections
                | [] -> n 
                | _::t -> if n > ListDebugViewMaxLength then n else count t (n+1) 
 
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
            [<DebuggerBrowsable(DebuggerBrowsableState.RootHidden)>]
 #endif
            member x.Items =
@@ -3653,14 +3641,12 @@ namespace Microsoft.FSharp.Collections
             loop n l
 
     type List<'T> with
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
         [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
 #endif
         member l.Length = PrivateListHelpers.lengthAcc 0 l
 
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
         [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
 #endif
         member l.DebugDisplay = 
@@ -3673,15 +3659,13 @@ namespace Microsoft.FSharp.Collections
         member l.Head   = match l with a :: _ -> a | [] -> raise (System.InvalidOperationException(SR.GetString(SR.inputListWasEmpty)))
         member l.Tail   = match l with _ :: b -> b | [] -> raise (System.InvalidOperationException(SR.GetString(SR.inputListWasEmpty)))
 
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
         [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
 #endif
         member l.IsEmpty  = match l with [] -> true | _ -> false
         member l.Item with get(index) = PrivateListHelpers.nth l index
 
-#if FX_NO_DEBUG_DISPLAYS
-#else
+#if !FX_NO_DEBUG_DISPLAYS
         [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
 #endif
         static member Empty       : 'T list = []
@@ -3709,6 +3693,11 @@ namespace Microsoft.FSharp.Collections
 
         interface System.Collections.IEnumerable with
             member l.GetEnumerator() = (PrivateListHelpers.mkListEnumerator l :> System.Collections.IEnumerator)
+
+#if !FSCORE_PORTABLE_OLD
+        interface IReadOnlyCollection<'T> with
+            member l.Count = l.Length
+#endif
 
     type seq<'T> = IEnumerable<'T>
 
@@ -3805,13 +3794,13 @@ namespace Microsoft.FSharp.Core
             | _ -> false
 
         [<CompiledName("IsNotNull")>]
-        let inline isNotNull (value : 'T) = 
+        let inline internal isNotNull (value : 'T) = 
             match value with 
             | null -> false 
             | _ -> true
 
         [<CompiledName("Raise")>]
-        let raise (e: exn) = (# "throw" e : 'T #)
+        let inline raise (e: exn) = (# "throw" e : 'T #)
 
         let Failure message = new System.Exception(message)
         
@@ -3845,7 +3834,7 @@ namespace Microsoft.FSharp.Core
 *)
 
         [<CompiledName("FailWith")>]
-        let failwith message = raise (Failure(message))
+        let inline failwith message = raise (Failure(message))
 
 
         [<CompiledName("InvalidArg")>]
@@ -3871,11 +3860,11 @@ namespace Microsoft.FSharp.Core
 
         [<CompiledName("Fst")>]
         [<CodeAnalysis.SuppressMessage("Microsoft.Naming","CA1704:IdentifiersShouldBeSpelledCorrectly")>]
-        let fst (a,_) = a
+        let inline fst (a,_) = a
 
         [<CompiledName("Snd")>]
         [<CodeAnalysis.SuppressMessage("Microsoft.Naming","CA1704:IdentifiersShouldBeSpelledCorrectly")>]
-        let snd (_,b) = b
+        let inline snd (_,b) = b
 
         [<CompiledName("Ignore")>]
         let inline ignore _ = ()
@@ -4151,8 +4140,7 @@ namespace Microsoft.FSharp.Core
 
         [<CompiledName("Decrement")>]
         let decr x = x.contents <- x.contents - 1
-#if FX_NO_EXIT
-#else
+#if !FX_NO_EXIT
         [<CompiledName("Exit")>]
         let exit (n:int) = System.Environment.Exit(n); failwith "System.Environment.Exit did not exit!"
 #endif
@@ -4710,14 +4698,11 @@ namespace Microsoft.FSharp.Core
         module Attributes = 
             open System.Runtime.CompilerServices
 
-#if FX_NO_DEFAULT_DEPENDENCY_TYPE
-#else
-            [<Dependency("FSharp.Core",LoadHint.Always)>] 
+#if !FX_NO_DEFAULT_DEPENDENCY_TYPE
             [<assembly: System.Runtime.CompilerServices.DefaultDependency(System.Runtime.CompilerServices.LoadHint.Always)>] 
 #endif
 
-#if FX_NO_COMVISIBLE
-#else
+#if !FX_NO_COMVISIBLE
             [<assembly: System.Runtime.InteropServices.ComVisible(false)>]
 #endif            
             [<assembly: System.CLSCompliant(true)>]
@@ -4729,13 +4714,9 @@ namespace Microsoft.FSharp.Core
             [<assembly: System.Security.SecurityRules(System.Security.SecurityRuleSet.Level2)>] // v4 transparency; soon to be the default, but not yet
 #endif
 #else
-#if FX_NO_SECURITY_PERMISSIONS
-#else
-#if FX_SIMPLE_SECURITY_PERMISSIONS
+#if !FX_NO_SECURITY_PERMISSIONS
             // REVIEW: Need to choose a specific permission for the action to be applied to
             [<assembly: System.Security.Permissions.SecurityPermission(System.Security.Permissions.SecurityAction.RequestMinimum)>]
-#else
-#endif
 #endif
 #endif
             do ()
@@ -5191,7 +5172,7 @@ namespace Microsoft.FSharp.Core
                 // << will be < or > depending on direction.
                 // Assumes n << m and zero << step (i.e. it's a "proper" range).
                 //--------
-                // NOTE: "inline" so << becomes direct operation (should be IL comparision operation)
+                // NOTE: "inline" so << becomes direct operation (should be IL comparison operation)
                 inherit BaseRangeEnumerator<'T>()
                 let mutable z : 'State = n
                 override obj.DoReset() = z <- n
@@ -6312,7 +6293,7 @@ namespace System
             match funcOrException with 
             | null -> value 
             | _ -> 
-                // Enter the lock in case another thread is in the process of evaluting the result
+                // Enter the lock in case another thread is in the process of evaluating the result
                 System.Threading.Monitor.Enter(x);
                 try 
                     match funcOrException with 

@@ -4,28 +4,16 @@
 /// constraint solving and method overload resolution.
 module internal Microsoft.FSharp.Compiler.TypeRelations
 
-open Internal.Utilities
-open System.Text
-
 open Microsoft.FSharp.Compiler 
-open Microsoft.FSharp.Compiler.AbstractIL 
-open Microsoft.FSharp.Compiler.AbstractIL.IL 
 open Microsoft.FSharp.Compiler.AbstractIL.Internal 
 open Microsoft.FSharp.Compiler.AbstractIL.Internal.Library 
-open Microsoft.FSharp.Compiler.AbstractIL.Diagnostics 
-open Microsoft.FSharp.Compiler.Range
-open Microsoft.FSharp.Compiler.Ast
 open Microsoft.FSharp.Compiler.ErrorLogger
 open Microsoft.FSharp.Compiler.Tast
 open Microsoft.FSharp.Compiler.Tastops
 open Microsoft.FSharp.Compiler.Tastops.DebugPrint
 open Microsoft.FSharp.Compiler.TcGlobals
-open Microsoft.FSharp.Compiler.AbstractIL.IL 
-open Microsoft.FSharp.Compiler.Lib
 open Microsoft.FSharp.Compiler.Infos
 open Microsoft.FSharp.Compiler.PrettyNaming
-open Microsoft.FSharp.Compiler.AccessibilityLogic
-open Microsoft.FSharp.Compiler.NameResolution
 
 //-------------------------------------------------------------------------
 // a :> b without coercion based on finalized (no type variable) types
@@ -137,7 +125,7 @@ let rec TypeFeasiblySubsumesType ndeep g amap m ty1 canCoerce ty2 =
 /// variables when compiling patterns at generalized bindings.
 ///     e.g. let ([],x) = ([],[])
 /// Here x gets a generalized type "list<'T>".
-let ChooseTyparSolutionAndRange g amap (tp:Typar) =
+let ChooseTyparSolutionAndRange (g: TcGlobals) amap (tp:Typar) =
     let m = tp.Range
     let max,m = 
          let initial = 
@@ -259,7 +247,7 @@ let tryDestTopLambda g amap (ValReprInfo (tpNames,_,_) as tvd) (e,ty) =
     let n = tvd.NumCurriedArgs
     let tps,taue,tauty = 
         match e with 
-        | Expr.TyLambda (_,tps,b,_,retTy) when not (List.isEmpty tpNames) -> tps,b,retTy 
+        | Expr.TyLambda (_,tps,b,_,retTy) when not (isNil tpNames) -> tps,b,retTy 
         | _ -> [],e,ty
     let ctorThisValOpt,baseValOpt,vsl,body,retTy = startStripLambdaUpto n (taue,tauty)
     if vsl.Length <> n then 
@@ -285,7 +273,7 @@ let IteratedAdjustArityOfLambda g amap topValInfo e =
     let tps,ctorThisValOpt,baseValOpt,vsl,body,bodyty = destTopLambda g amap topValInfo (e, tyOfExpr g e)
     let arities = topValInfo.AritiesOfArgs
     if arities.Length <> vsl.Length then 
-        errorR(InternalError(sprintf "IteratedAdjustArityOfLambda, List.length arities = %d, List.length vsl = %d" (List.length arities) (List.length vsl), body.Range))
+        errorR(InternalError(sprintf "IteratedAdjustArityOfLambda, List.length arities = %d, List.length vsl = %d" arities.Length vsl.Length, body.Range))
     let vsl,body = IteratedAdjustArityOfLambdaBody g arities vsl body
     tps,ctorThisValOpt,baseValOpt,vsl,body,bodyty
 

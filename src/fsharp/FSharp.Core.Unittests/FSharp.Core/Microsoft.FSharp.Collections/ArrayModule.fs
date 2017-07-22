@@ -18,7 +18,7 @@ Make sure each method works on:
 * Null    array (null)
 *)
 
-[<TestFixture>]
+[<TestFixture>][<Category "Collections.Array">][<Category "FSharp.Core.Collections">]
 type ArrayModule() =
 
     [<Test>]
@@ -416,8 +416,7 @@ type ArrayModule() =
     member this.Choose() = 
         this.ChooseTester Array.choose Array.choose
 
-#if FX_NO_TPL_PARALLEL
-#else
+#if !FX_NO_TPL_PARALLEL
     [<Test>]
     member this.``Parallel.Choose`` () = 
         this.ChooseTester Array.Parallel.choose Array.Parallel.choose
@@ -464,8 +463,7 @@ type ArrayModule() =
         Array.collect f [|1;2;3|] |> ignore
         Assert.AreEqual(3,!stamp)
         
-#if FX_NO_TPL_PARALLEL
-#else
+#if !FX_NO_TPL_PARALLEL
     [<Test>]
     member this.``Parallel.Collect`` () =
         this.CollectTester Array.Parallel.collect Array.Parallel.collect
@@ -721,13 +719,13 @@ type ArrayModule() =
         
     [<Test>]
     member this.Filter2 () =
-        // The Array.filter algorith uses a bitmask as a temporary storage mechanism
+        // The Array.filter algorithm uses a bitmask as a temporary storage mechanism
         // for which elements to filter. This introduces some possible error conditions
         // around how the filter is filled and subsequently used, so filter test
         // does a pretty exhaustive test suite.
         // It works by first generating arrays which consist of sequences of unique
         // positive and negative numbers, as per arguments, it then filters for the
-        // positive values, and then compares the results agains the original array.
+        // positive values, and then compares the results against the original array.
 
         let makeTestArray size posLength negLength startWithPos startFromEnd =
             let array = Array.zeroCreate size
@@ -1281,8 +1279,7 @@ type ArrayModule() =
         Array.init 10 f |> ignore
         Assert.AreEqual (10, !stamp)
         
-#if FX_NO_TPL_PARALLEL
-#else
+#if !FX_NO_TPL_PARALLEL
     [<Test>]
     member this.``Parallel.Init``() = 
         this.InitTester Array.Parallel.init Array.Parallel.init
@@ -1494,8 +1491,7 @@ type ArrayModule() =
         Array.map f [| 1..100 |] |> ignore
         Assert.AreEqual(100,!stamp)
         
-#if FX_NO_TPL_PARALLEL
-#else
+#if !FX_NO_TPL_PARALLEL
     [<Test>]
     member this.``Parallel.Map`` () =
         this.MapTester Array.Parallel.map Array.Parallel.map
@@ -1537,8 +1533,7 @@ type ArrayModule() =
         Assert.AreEqual(100,!stamp)
         ()
         
-#if FX_NO_TPL_PARALLEL
-#else
+#if !FX_NO_TPL_PARALLEL
     [<Test>]
     member this.``Parallel.Mapi`` () =
         this.MapiTester Array.Parallel.mapi Array.Parallel.mapi
@@ -1653,8 +1648,7 @@ type ArrayModule() =
         Assert.AreEqual([|[]|], Array.singleton [])
         Assert.IsTrue([|[||]|] = Array.singleton [||])
 
-#if FX_NO_TPL_PARALLEL
-#else
+#if !FX_NO_TPL_PARALLEL
     [<Test>]
     member this.``Parallel.Partition`` () =
         this.PartitionTester Array.Parallel.partition Array.Parallel.partition    

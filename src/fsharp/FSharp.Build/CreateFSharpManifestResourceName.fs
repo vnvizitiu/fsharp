@@ -26,7 +26,7 @@ type CreateFSharpManifestResourceName public () =
         //
         // However for non-resx resources, for some reason Visual FSharp does _not_ add the directory name to the resource name.
         // It is very unclear where the directory name gets dropped in the Visual FSharp implementation 
-        // - is it in Microsoft.Common.targets, Microfost.FSharp.targets or how the base type CreateCSharpManifestResourceName 
+        // - is it in Microsoft.Common.targets, Microsoft.FSharp.Targets or how the base type CreateCSharpManifestResourceName 
         // is created and used - who knows, the code is not easy to understand despite it doing something very simple. That's
         // the nature of MSBuild/XBuild....
         //
@@ -34,8 +34,13 @@ type CreateFSharpManifestResourceName public () =
         // for consistency with Visual FSharp. This may not be the right place to do this and this many not be consistent
         // when cultures are used - that case has not been tested.
 
-        let fileName = if fileName.EndsWith(".resources", StringComparison.OrdinalIgnoreCase) then fileName else Path.GetFileName(fileName)
-        let linkFileName = if linkFileName.EndsWith(".resources", StringComparison.OrdinalIgnoreCase) then linkFileName else Path.GetFileName(linkFileName)
+        let runningOnMono = 
+            try
+                System.Type.GetType("Mono.Runtime") <> null
+            with e -> 
+                false  
+        let fileName = if not runningOnMono || fileName.EndsWith(".resources", StringComparison.OrdinalIgnoreCase) then fileName else Path.GetFileName(fileName)
+        let linkFileName = if not runningOnMono || linkFileName.EndsWith(".resources", StringComparison.OrdinalIgnoreCase) then linkFileName else Path.GetFileName(linkFileName)
 
         let embeddedFileName = 
             match linkFileName with

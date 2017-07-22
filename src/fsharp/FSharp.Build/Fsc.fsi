@@ -21,12 +21,16 @@ type Fsc = class
              member DebugSymbols : bool with get,set
              member DebugType : string with get,set
              member DefineConstants : Microsoft.Build.Framework.ITaskItem [] with get,set
+             member DelaySign : bool with get,set
              member DisabledWarnings : string with get,set
              member DocumentationFile : string with get,set
+             member Embed : string with get,set
+             member EmbedAllSources : bool with get,set
              member GenerateInterfaceFile : string with get,set
              member KeyFile : string with get,set
              member NoFramework : bool with get,set
              member Optimize : bool with get,set
+             member PublicSign : bool with get,set
              member Tailcalls : bool with get,set
              member OtherFlags : string with get,set
              member OutputAssembly : string with get,set
@@ -37,12 +41,9 @@ type Fsc = class
              member References : Microsoft.Build.Framework.ITaskItem [] with get,set
              member ReferencePath : string with get,set
              member Resources : Microsoft.Build.Framework.ITaskItem [] with get,set
+             member SourceLink : string with get,set
              member Sources : Microsoft.Build.Framework.ITaskItem [] with get,set
              member TargetType : string with get,set
-#if FX_ATLEAST_35
-#else
-             member ToolExe : string with get,set
-#endif             
              member ToolPath : string with get,set
              member TreatWarningsAsErrors : bool with get,set
              member Utf8Output : bool with get,set
@@ -56,4 +57,7 @@ type Fsc = class
              member HighEntropyVA : bool with get,set
              member TargetProfile : string with get,set
              member DotnetFscCompilerPath : string with get,set
+             member SkipCompilerExecution : bool with get,set
+             member ProvideCommandLineArgs : bool with get,set
+             member CommandLineArgs : Microsoft.Build.Framework.ITaskItem [] with get,set
            end

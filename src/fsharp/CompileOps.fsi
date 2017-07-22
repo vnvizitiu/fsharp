@@ -3,7 +3,9 @@
 /// Coordinating compiler operations - configuration, loading initial context, reporting errors etc.
 module internal Microsoft.FSharp.Compiler.CompileOps
 
+open System
 open System.Text
+open System.Collections.Generic
 open Internal.Utilities
 open Microsoft.FSharp.Compiler.AbstractIL 
 open Microsoft.FSharp.Compiler.AbstractIL.IL
@@ -28,13 +30,8 @@ open Microsoft.FSharp.Compiler.ExtensionTyping
 
 #if DEBUG
 
-#if COMPILED_AS_LANGUAGE_SERVICE_DLL
 module internal CompilerService =
-#else
-module internal FullCompiler =
-#endif
     val showAssertForUnexpectedException : bool ref
-
 #endif
 
 //----------------------------------------------------------------------------
@@ -67,63 +64,66 @@ val ComputeQualifiedNameOfFileFromUniquePath : range * string list -> Ast.Qualif
 
 val PrependPathToInput : Ast.Ident list -> Ast.ParsedInput -> Ast.ParsedInput
 
+/// Checks if a module name is already given and deduplicates the name if needed.
+val DeduplicateModuleName : Dictionary<string,Set<string>> -> Set<string> -> string -> Ast.QualifiedNameOfFile -> Ast.QualifiedNameOfFile
+
+/// Checks if a ParsedInput is using a module name that was already given and deduplicates the name if needed.
+val DeduplicateParsedInputModuleName : Dictionary<string,Set<string>> -> Ast.ParsedInput -> Ast.ParsedInput
+
 val ParseInput : (UnicodeLexing.Lexbuf -> Parser.token) * ErrorLogger * UnicodeLexing.Lexbuf * string option * string * isLastCompiland:(bool * bool) -> Ast.ParsedInput
 
 //----------------------------------------------------------------------------
 // Error and warnings
 //--------------------------------------------------------------------------
 
-/// Represents the style being used to format errros
-type ErrorStyle = 
-    | DefaultErrors 
-    | EmacsErrors 
-    | TestErrors 
-    | VSErrors
-    | GccErrors
-
 /// Get the location associated with an error
-val GetRangeOfError : PhasedError -> range option
+val GetRangeOfDiagnostic : PhasedDiagnostic -> range option
 
 /// Get the number associated with an error
-val GetErrorNumber : PhasedError -> int
+val GetDiagnosticNumber : PhasedDiagnostic -> int
 
 /// Split errors into a "main" error and a set of associated errors
-val SplitRelatedErrors : PhasedError -> PhasedError * PhasedError list
+val SplitRelatedDiagnostics : PhasedDiagnostic -> PhasedDiagnostic * PhasedDiagnostic list
 
 /// Output an error to a buffer
-val OutputPhasedError : StringBuilder -> PhasedError -> bool -> unit
+val OutputPhasedDiagnostic : StringBuilder -> PhasedDiagnostic -> flattenErrors: bool -> unit
 
 /// Output an error or warning to a buffer
-val OutputErrorOrWarning : implicitIncludeDir:string * showFullPaths: bool * flattenErrors: bool * errorStyle: ErrorStyle *  warning:bool -> StringBuilder -> PhasedError -> unit
+val OutputDiagnostic : implicitIncludeDir:string * showFullPaths: bool * flattenErrors: bool * errorStyle: ErrorStyle *  isError:bool -> StringBuilder -> PhasedDiagnostic -> unit
 
 /// Output extra context information for an error or warning to a buffer
-val OutputErrorOrWarningContext : prefix:string -> fileLineFunction:(string -> int -> string) -> StringBuilder -> PhasedError -> unit
+val OutputDiagnosticContext : prefix:string -> fileLineFunction:(string -> int -> string) -> StringBuilder -> PhasedDiagnostic -> unit
 
+/// Part of LegacyHostedCompilerForTesting
 [<RequireQualifiedAccess>]
-type ErrorLocation =
+type DiagnosticLocation =
     { Range : range
       File : string
       TextRepresentation : string
       IsEmpty : bool }
 
+/// Part of LegacyHostedCompilerForTesting
 [<RequireQualifiedAccess>]
-type CanonicalInformation = 
+type DiagnosticCanonicalInformation = 
     { ErrorNumber : int
       Subcategory : string
       TextRepresentation : string }
 
+/// Part of LegacyHostedCompilerForTesting
 [<RequireQualifiedAccess>]
-type DetailedIssueInfo = 
-    { Location : ErrorLocation option
-      Canonical : CanonicalInformation
+type DiagnosticDetailedInfo = 
+    { Location : DiagnosticLocation option
+      Canonical : DiagnosticCanonicalInformation
       Message : string }
 
+/// Part of LegacyHostedCompilerForTesting
 [<RequireQualifiedAccess>]
-type ErrorOrWarning = 
+type Diagnostic = 
     | Short of bool * string
-    | Long of bool * DetailedIssueInfo
+    | Long of bool * DiagnosticDetailedInfo
 
-val CollectErrorOrWarning : implicitIncludeDir:string * showFullPaths: bool * flattenErrors: bool * errorStyle: ErrorStyle *  warning:bool * PhasedError -> seq<ErrorOrWarning>
+/// Part of LegacyHostedCompilerForTesting
+val CollectDiagnostic : implicitIncludeDir:string * showFullPaths: bool * flattenErrors: bool * errorStyle: ErrorStyle *  warning:bool * PhasedDiagnostic -> seq<Diagnostic>
 
 //----------------------------------------------------------------------------
 // Resolve assembly references 
@@ -164,13 +164,28 @@ type IRawFSharpAssemblyData =
     abstract ILAssemblyRefs : ILAssemblyRef list
     abstract ShortAssemblyName : string
 
-type IProjectReference = 
+type TimeStampCache = 
+    new : defaultTimeStamp: DateTime -> TimeStampCache
+    member GetFileTimeStamp: string -> DateTime
+    member GetProjectReferenceTimeStamp: IProjectReference * CompilationThreadToken -> DateTime
+
+and IProjectReference = 
+
     /// The name of the assembly file generated by the project
     abstract FileName : string 
+
     /// Evaluate raw contents of the assembly file generated by the project
-    abstract EvaluateRawContents : unit -> IRawFSharpAssemblyData option
-    /// Get the logical timestamp that would be the timestamp of the assembly file generated by the project
-    abstract GetLogicalTimeStamp : unit -> System.DateTime option
+    abstract EvaluateRawContents : CompilationThreadToken -> Cancellable<IRawFSharpAssemblyData option>
+
+    /// Get the logical timestamp that would be the timestamp of the assembly file generated by the project.
+    ///
+    /// For project references this is maximum of the timestamps of all dependent files.
+    /// The project is not actually built, nor are any assemblies read, but the timestamps for each dependent file 
+    /// are read via the FileSystem.  If the files don't exist, then a default timestamp is used.
+    ///
+    /// The operation returns None only if it is not possible to create an IncrementalBuilder for the project at all, e.g. if there
+    /// are fatal errors in the options for the project.
+    abstract TryGetLogicalTimeStamp : TimeStampCache * CompilationThreadToken -> System.DateTime option
 
 type AssemblyReference = 
     | AssemblyReference of range * string  * IProjectReference option
@@ -183,7 +198,7 @@ type AssemblyResolution =
        originalReference : AssemblyReference
        /// Path to the resolvedFile
        resolvedPath : string    
-       /// Create the tooltip texxt for the assembly reference
+       /// Create the tooltip text for the assembly reference
        prepareToolTip : unit -> string
        /// Whether or not this is an installed system assembly (for example, System.dll)
        sysdir : bool
@@ -219,7 +234,6 @@ type VersionFlag =
     member GetVersionInfo : implicitIncludeDir:string -> ILVersionInfo
     member GetVersionString : implicitIncludeDir:string -> string
 
-     
 type TcConfigBuilder =
     { mutable primaryAssembly : PrimaryAssembly
       mutable autoResolveOpenDirectivesToDlls: bool
@@ -232,6 +246,7 @@ type TcConfigBuilder =
       mutable compilingFslib: bool
       mutable compilingFslib20: string option
       mutable compilingFslib40: bool
+      mutable compilingFslibNoBigInt: bool
       mutable useIncrementalBuilder: bool
       mutable includes: string list
       mutable implicitOpens: string list
@@ -239,7 +254,6 @@ type TcConfigBuilder =
       mutable framework: bool
       mutable resolutionEnvironment : ReferenceResolver.ResolutionEnvironment
       mutable implicitlyResolveAssemblies : bool
-      mutable addVersionSpecificFrameworkReferences : bool
       /// Set if the user has explicitly turned indentation-aware syntax on/off
       mutable light: bool option
       mutable conditionalCompilationDefines: string list
@@ -296,12 +310,12 @@ type TcConfigBuilder =
       mutable noSignatureData : bool
       mutable onlyEssentialOptimizationData : bool
       mutable useOptimizationDataFile : bool
-      mutable useSignatureDataFile : bool
       mutable jitTracking : bool
       mutable portablePDB : bool
       mutable embeddedPDB : bool
       mutable embedAllSource : bool
       mutable embedSourceList : string list
+      mutable sourceLink : string
       mutable ignoreSymbolStoreSequencePoints : bool
       mutable internConstantStrings : bool
       mutable extraOptimizationIterations : int
@@ -309,7 +323,7 @@ type TcConfigBuilder =
       mutable win32manifest : string
       mutable includewin32manifest : bool
       mutable linkResources : string list
-      mutable referenceResolver: ReferenceResolver.Resolver 
+      mutable legacyReferenceResolver: ReferenceResolver.Resolver 
       mutable showFullPaths : bool
       mutable errorStyle : ErrorStyle
       mutable utf8output : bool
@@ -318,7 +332,6 @@ type TcConfigBuilder =
       mutable abortOnError : bool
       mutable baseAddress : int32 option
  #if DEBUG
-      mutable writeGeneratedILFiles : bool (* write il files? *)  
       mutable showOptimizationData : bool
 #endif
       mutable showTerms     : bool 
@@ -329,11 +342,11 @@ type TcConfigBuilder =
       mutable optsOn        : bool 
       mutable optSettings   : Optimizer.OptimizationSettings 
       mutable emitTailcalls : bool
+      mutable deterministic : bool
 #if PREFERRED_UI_LANG
       mutable preferredUiLang: string option
-#else
-      mutable lcid         : int option
 #endif
+      mutable lcid         : int option
       mutable productNameForBannerText : string
       mutable showBanner  : bool
       mutable showTimes : bool
@@ -355,18 +368,17 @@ type TcConfigBuilder =
       mutable emitDebugInfoInQuotations : bool
       mutable exename : string option 
       mutable copyFSharpCore : bool
-#if SHADOW_COPY_REFERENCES
       mutable shadowCopyReferences : bool
-#endif
     }
 
     static member CreateNew : 
-        referenceResolver: ReferenceResolver.Resolver *
+        legacyReferenceResolver: ReferenceResolver.Resolver *
         defaultFSharpBinariesDir: string * 
         optimizeForMemory: bool * 
         implicitIncludeDir: string * 
         isInteractive: bool * 
-        isInvalidationSupported: bool -> TcConfigBuilder
+        isInvalidationSupported: bool *
+        defaultCopyFSharpCore: bool -> TcConfigBuilder
 
     member DecideNames : string list -> outfile: string * pdbfile: string option * assemblyName: string 
     member TurnWarningOff : range * string -> unit
@@ -395,6 +407,7 @@ type TcConfig =
     member compilingFslib: bool
     member compilingFslib20: string option
     member compilingFslib40: bool
+    member compilingFslibNoBigInt: bool
     member useIncrementalBuilder: bool
     member includes: string list
     member implicitOpens: string list
@@ -452,12 +465,12 @@ type TcConfig =
     member noSignatureData : bool
     member onlyEssentialOptimizationData : bool
     member useOptimizationDataFile : bool
-    member useSignatureDataFile : bool
     member jitTracking : bool
     member portablePDB : bool
     member embeddedPDB : bool
     member embedAllSource : bool
     member embedSourceList : string list
+    member sourceLink : string
     member ignoreSymbolStoreSequencePoints : bool
     member internConstantStrings : bool
     member extraOptimizationIterations : int
@@ -473,7 +486,6 @@ type TcConfig =
     member maxErrors : int
     member baseAddress : int32 option
 #if DEBUG
-    member writeGeneratedILFiles : bool (* write il files? *)  
     member showOptimizationData : bool
 #endif
     member showTerms     : bool 
@@ -483,6 +495,7 @@ type TcConfig =
     member doFinalSimplify : bool
     member optSettings   : Optimizer.OptimizationSettings 
     member emitTailcalls : bool
+    member deterministic : bool
 #if PREFERRED_UI_LANG
     member preferredUiLang: string option
 #else
@@ -507,7 +520,7 @@ type TcConfig =
 
 
     member ComputeLightSyntaxInitialStatus : string -> bool
-    member TargetFrameworkDirectories : string list
+    member GetTargetFrameworkDirectories : unit -> string list
     
     /// Get the loaded sources that exist and issue a warning for the ones that don't
     member GetAvailableLoadedSources : unit -> (range*string) list
@@ -515,7 +528,8 @@ type TcConfig =
     member ComputeCanContainEntryPoint : sourceFiles:string list -> bool list *bool 
 
     /// File system query based on TcConfig settings
-    member ResolveSourceFile : range * string * string -> string
+    member ResolveSourceFile : range * filename: string * pathLoadedFrom: string -> string
+
     /// File system query based on TcConfig settings
     member MakePathAbsolute : string -> string
 
@@ -523,9 +537,7 @@ type TcConfig =
     member sqmNumOfSourceFiles : int
     member sqmSessionStartedTime : int64
     member copyFSharpCore : bool
-#if SHADOW_COPY_REFERENCES
     member shadowCopyReferences : bool
-#endif
     static member Create : TcConfigBuilder * validate: bool -> TcConfig
 
 /// Represents a computation to return a TcConfig. Normally this is just a constant immutable TcConfig,
@@ -533,7 +545,7 @@ type TcConfig =
 [<Sealed>]
 type TcConfigProvider = 
 
-    member Get : unit -> TcConfig
+    member Get : CompilationThreadToken -> TcConfig
 
     /// Get a TcConfigProvider which will return only the exact TcConfig.
     static member Constant : TcConfig -> TcConfigProvider
@@ -577,12 +589,12 @@ type ImportedAssembly =
 type TcAssemblyResolutions = 
     member GetAssemblyResolutions : unit -> AssemblyResolution list
 
-    static member SplitNonFoundationalResolutions  : TcConfig -> AssemblyResolution list * AssemblyResolution list * UnresolvedAssemblyReference list
-    static member BuildFromPriorResolutions     : TcConfig * AssemblyResolution list * UnresolvedAssemblyReference list -> TcAssemblyResolutions 
+    static member SplitNonFoundationalResolutions  : CompilationThreadToken * TcConfig -> AssemblyResolution list * AssemblyResolution list * UnresolvedAssemblyReference list
+    static member BuildFromPriorResolutions     : CompilationThreadToken * TcConfig * AssemblyResolution list * UnresolvedAssemblyReference list -> TcAssemblyResolutions 
     
 
 
-/// Repreesnts a table of imported assemblies with their resolutions.
+/// Represents a table of imported assemblies with their resolutions.
 [<Sealed>] 
 type TcImports =
     interface System.IDisposable
@@ -592,55 +604,58 @@ type TcImports =
     member GetCcusInDeclOrder : unit -> CcuThunk list
     /// This excludes any framework imports (which may be shared between multiple builds)
     member GetCcusExcludingBase : unit -> CcuThunk list 
-    member FindDllInfo : range * string -> ImportedBinary
-    member TryFindDllInfo : range * string * lookupOnly: bool -> option<ImportedBinary>
-    member FindCcuFromAssemblyRef : range * ILAssemblyRef -> CcuResolutionResult
+    member FindDllInfo : CompilationThreadToken * range * string -> ImportedBinary
+    member TryFindDllInfo : CompilationThreadToken * range * string * lookupOnly: bool -> option<ImportedBinary>
+    member FindCcuFromAssemblyRef : CompilationThreadToken * range * ILAssemblyRef -> CcuResolutionResult
 #if EXTENSIONTYPING
     member ProviderGeneratedTypeRoots : ProviderGeneratedType list
 #endif
     member GetImportMap : unit -> Import.ImportMap
 
     /// Try to resolve a referenced assembly based on TcConfig settings.
-    member TryResolveAssemblyReference : AssemblyReference * ResolveAssemblyReferenceMode -> OperationResult<AssemblyResolution list>
+    member TryResolveAssemblyReference : CompilationThreadToken * AssemblyReference * ResolveAssemblyReferenceMode -> OperationResult<AssemblyResolution list>
 
     /// Resolve a referenced assembly and report an error if the resolution fails.
-    member ResolveAssemblyReference : AssemblyReference * ResolveAssemblyReferenceMode -> AssemblyResolution list
+    member ResolveAssemblyReference : CompilationThreadToken * AssemblyReference * ResolveAssemblyReferenceMode -> AssemblyResolution list
+
+    /// Try to find the given assembly reference by simple name.  Used in magic assembly resolution.  Effectively does implicit
+    /// unification of assemblies by simple assembly name.
+    member TryFindExistingFullyQualifiedPathBySimpleAssemblyName : CompilationThreadToken * string -> string option
+
     /// Try to find the given assembly reference.
-    member TryFindExistingFullyQualifiedPathFromAssemblyRef : ILAssemblyRef -> string option
+    member TryFindExistingFullyQualifiedPathByExactAssemblyRef : CompilationThreadToken * ILAssemblyRef -> string option
+
 #if EXTENSIONTYPING
     /// Try to find a provider-generated assembly
-    member TryFindProviderGeneratedAssemblyByName : assemblyName:string -> System.Reflection.Assembly option
+    member TryFindProviderGeneratedAssemblyByName : CompilationThreadToken * assemblyName:string -> System.Reflection.Assembly option
 #endif
     /// Report unresolved references that also weren't consumed by any type providers.
     member ReportUnresolvedAssemblyReferences : UnresolvedAssemblyReference list -> unit
     member SystemRuntimeContainsType : string -> bool
 
-    static member BuildFrameworkTcImports      : TcConfigProvider * AssemblyResolution list * AssemblyResolution list -> TcGlobals * TcImports
-    static member BuildNonFrameworkTcImports   : TcConfigProvider * TcGlobals * TcImports * AssemblyResolution list * UnresolvedAssemblyReference list -> TcImports
-    static member BuildTcImports               : TcConfigProvider -> TcGlobals * TcImports
+    static member BuildFrameworkTcImports      : CompilationThreadToken * TcConfigProvider * AssemblyResolution list * AssemblyResolution list -> Cancellable<TcGlobals * TcImports>
+    static member BuildNonFrameworkTcImports   : CompilationThreadToken * TcConfigProvider * TcGlobals * TcImports * AssemblyResolution list * UnresolvedAssemblyReference list -> Cancellable<TcImports>
+    static member BuildTcImports               : CompilationThreadToken * TcConfigProvider -> Cancellable<TcGlobals * TcImports>
 
 //----------------------------------------------------------------------------
 // Special resources in DLLs
 //--------------------------------------------------------------------------
 
-/// Determine if an IL resource attached to an F# assemnly is an F# signature data resource
+/// Determine if an IL resource attached to an F# assembly is an F# signature data resource
 val IsSignatureDataResource : ILResource -> bool
 
-/// Determine if an IL resource attached to an F# assemnly is an F# optimization data resource
+/// Determine if an IL resource attached to an F# assembly is an F# optimization data resource
 val IsOptimizationDataResource : ILResource -> bool
 
-/// Determine if an IL resource attached to an F# assemnly is an F# quotation data resource for reflected definitions
+/// Determine if an IL resource attached to an F# assembly is an F# quotation data resource for reflected definitions
 val IsReflectedDefinitionsResource : ILResource -> bool
 val GetSignatureDataResourceName : ILResource -> string
 
-#if NO_COMPILER_BACKEND
-#else
 /// Write F# signature data as an IL resource
 val WriteSignatureData : TcConfig * TcGlobals * Tastops.Remap * CcuThunk * string -> ILResource
 
 /// Write F# optimization data as an IL resource
 val WriteOptimizationData :  TcGlobals * string * CcuThunk * Optimizer.LazyModuleInfo -> ILResource
-#endif
 
 
 //----------------------------------------------------------------------------
@@ -649,19 +664,19 @@ val WriteOptimizationData :  TcGlobals * string * CcuThunk * Optimizer.LazyModul
 
 /// Process #r in F# Interactive.
 /// Adds the reference to the tcImports and add the ccu to the type checking environment.
-val RequireDLL : TcImports * TcEnv * thisAssemblyName: string * referenceRange: range * file: string -> TcEnv * (ImportedBinary list * ImportedAssembly list)
+val RequireDLL : CompilationThreadToken * TcImports * TcEnv * thisAssemblyName: string * referenceRange: range * file: string -> TcEnv * (ImportedBinary list * ImportedAssembly list)
 
 /// Processing # commands
 val ProcessMetaCommandsFromInput : 
-              ('T -> range * string -> 'T) * 
-              ('T -> range * string -> 'T) * 
-              ('T -> range * string -> unit) -> TcConfigBuilder -> Ast.ParsedInput -> string -> 'T -> 'T
+    (('T -> range * string -> 'T) * ('T -> range * string -> 'T) * ('T -> range * string -> unit)) 
+    -> TcConfigBuilder * Ast.ParsedInput * string * 'T 
+    -> 'T
 
 /// Process all the #r, #I etc. in an input
-val ApplyMetaCommandsFromInputToTcConfig : TcConfig -> (Ast.ParsedInput * string) -> TcConfig
+val ApplyMetaCommandsFromInputToTcConfig : TcConfig * Ast.ParsedInput * string -> TcConfig
 
 /// Process the #nowarn in an input
-val ApplyNoWarnsToTcConfig : TcConfig -> (Ast.ParsedInput * string) -> TcConfig
+val ApplyNoWarnsToTcConfig : TcConfig * Ast.ParsedInput * string -> TcConfig
 
 //----------------------------------------------------------------------------
 // Scoped pragmas
@@ -674,7 +689,7 @@ val GetScopedPragmasForInput : Ast.ParsedInput -> ScopedPragma list
 val GetErrorLoggerFilteringByScopedPragmas : checkFile:bool * ScopedPragma list * ErrorLogger  -> ErrorLogger
 
 /// This list is the default set of references for "non-project" files. 
-val DefaultBasicReferencesForOutOfProjectSources : string list
+val DefaultReferencesForScriptsAndOutOfProjectSources : bool -> string list
 
 //----------------------------------------------------------------------------
 // Parsing
@@ -702,12 +717,14 @@ type TcState =
     /// Get the typing environment implied by the set of signature files and/or inferred signatures of implementation files checked so far
     member TcEnvFromSignatures : TcEnv
 
-    /// Get the typing environment implied by the set of implemetation files checked so far
+    /// Get the typing environment implied by the set of implementation files checked so far
     member TcEnvFromImpls : TcEnv
     /// The inferred contents of the assembly, containing the signatures of all implemented files.
     member PartialAssemblySignature : ModuleOrNamespaceType
 
     member NextStateAfterIncrementalFragment : TcEnv -> TcState
+
+    member CreatesGeneratedProvidedTypes : bool
 
 /// Get the initial type checking state for a set of inputs
 val GetInitialTcState : 
@@ -715,7 +732,7 @@ val GetInitialTcState :
 
 /// Check one input, returned as an Eventually computation
 val TypeCheckOneInputEventually :
-    (unit -> bool) * TcConfig * TcImports * TcGlobals * Ast.LongIdent option * NameResolution.TcResultsSink * TcState * Ast.ParsedInput  
+    checkForErrors:(unit -> bool) * TcConfig * TcImports * TcGlobals * Ast.LongIdent option * NameResolution.TcResultsSink * TcState * Ast.ParsedInput  
            -> Eventually<(TcEnv * TopAttribs * TypedImplFile list) * TcState>
 
 /// Finish the checking of multiple inputs 
@@ -725,18 +742,18 @@ val TypeCheckMultipleInputsFinish : (TcEnv * TopAttribs * 'T list) list * TcStat
 val TypeCheckClosedInputSetFinish : TypedImplFile list * TcState -> TcState * TypedImplFile list
 
 /// Check a closed set of inputs 
-val TypeCheckClosedInputSet :(unit -> bool) * TcConfig * TcImports * TcGlobals * Ast.LongIdent option * TcState * Ast.ParsedInput  list  -> TcState * TopAttribs * TypedImplFile list * TcEnv
+val TypeCheckClosedInputSet : CompilationThreadToken * checkForErrors: (unit -> bool) * TcConfig * TcImports * TcGlobals * Ast.LongIdent option * TcState * Ast.ParsedInput  list  -> TcState * TopAttribs * TypedImplFile list * TcEnv
 
 /// Check a single input and finish the checking
 val TypeCheckOneInputAndFinishEventually :
-    (unit -> bool) * TcConfig * TcImports * TcGlobals * Ast.LongIdent option * NameResolution.TcResultsSink * TcState * Ast.ParsedInput 
+    checkForErrors: (unit -> bool) * TcConfig * TcImports * TcGlobals * Ast.LongIdent option * NameResolution.TcResultsSink * TcState * Ast.ParsedInput 
         -> Eventually<(TcEnv * TopAttribs * TypedImplFile list) * TcState>
 
 /// Indicates if we should report a warning
-val ReportWarning : globalWarnLevel: int * specificWarnOff: int list * specificWarnOn: int list -> PhasedError -> bool
+val ReportWarning : globalWarnLevel: int * specificWarnOff: int list * specificWarnOn: int list -> PhasedDiagnostic -> bool
 
 /// Indicates if we should report a warning as an error
-val ReportWarningAsError : globalWarnLevel: int * specificWarnOff: int list * specificWarnOn: int list * specificWarnAsError: int list * specificWarnAsWarn: int list * globalWarnAsError: bool -> PhasedError -> bool
+val ReportWarningAsError : globalWarnLevel: int * specificWarnOff: int list * specificWarnOn: int list * specificWarnAsError: int list * specificWarnAsWarn: int list * globalWarnAsError: bool -> PhasedDiagnostic -> bool
 
 //----------------------------------------------------------------------------
 // #load closure
@@ -749,6 +766,14 @@ type CodeContext =
     | Editing
 
 [<RequireQualifiedAccess>]
+type LoadClosureInput = 
+    { FileName: string
+      SyntaxTree: ParsedInput option
+      ParseDiagnostics: (PhasedDiagnostic * bool) list 
+      MetaCommandDiagnostics: (PhasedDiagnostic * bool) list  }
+
+
+[<RequireQualifiedAccess>]
 type LoadClosure = 
     { /// The source files along with the ranges of the #load positions in each file.
       SourceFiles: (string * range list) list
@@ -756,23 +781,29 @@ type LoadClosure =
       /// The resolved references along with the ranges of the #r positions in each file.
       References: (string * AssemblyResolution list) list
 
-      /// The list of references that were not resolved during load closure. These may still be extension references.
+      /// The list of references that were not resolved during load closure.
       UnresolvedReferences : UnresolvedAssemblyReference list
 
-      /// The list of all sources in the closure with inputs when available
-      Inputs: (string * ParsedInput option) list
+      /// The list of all sources in the closure with inputs when available, with associated parse errors and warnings
+      Inputs: LoadClosureInput list
+
+      /// The original #load references, including those that didn't resolve
+      OriginalLoadReferences: (range * string) list
 
       /// The #nowarns
       NoWarns: (string * range list) list
 
-      /// *Parse* errors seen while parsing root of closure
-      RootErrors : PhasedError list
+      /// Diagnostics seen while processing resolutions
+      ResolutionDiagnostics : (PhasedDiagnostic * bool)  list
 
-      /// *Parse* warnings seen while parsing root of closure
-      RootWarnings : PhasedError list }
+      /// Diagnostics to show for root of closure (used by fsc.fs)
+      AllRootFileDiagnostics : (PhasedDiagnostic * bool) list
+
+      /// Diagnostics seen while processing the compiler options implied root of closure
+      LoadClosureRootFileDiagnostics : (PhasedDiagnostic * bool) list }   
 
     // Used from service.fs, when editing a script file
-    static member ComputeClosureOfSourceText : referenceResolver: ReferenceResolver.Resolver * filename: string * source: string * implicitDefines:CodeContext * useSimpleResolution: bool * useFsiAuxLib: bool * lexResourceManager: Lexhelp.LexResourceManager * applyCompilerOptions: (TcConfigBuilder -> unit) -> LoadClosure
+    static member ComputeClosureOfSourceText : CompilationThreadToken * legacyReferenceResolver: ReferenceResolver.Resolver * defaultFSharpBinariesDir: string * filename: string * source: string * implicitDefines:CodeContext * useSimpleResolution: bool * useFsiAuxLib: bool * lexResourceManager: Lexhelp.LexResourceManager * applyCompilerOptions: (TcConfigBuilder -> unit) * assumeDotNetFramework : bool -> LoadClosure
 
     /// Used from fsi.fs and fsc.fs, for #load and command line. The resulting references are then added to a TcConfig.
-    static member ComputeClosureOfSourceFiles : tcConfig:TcConfig * (string * range) list * implicitDefines:CodeContext * useDefaultScriptingReferences : bool * lexResourceManager : Lexhelp.LexResourceManager -> LoadClosure
+    static member ComputeClosureOfSourceFiles : CompilationThreadToken * tcConfig:TcConfig * (string * range) list * implicitDefines:CodeContext * lexResourceManager : Lexhelp.LexResourceManager -> LoadClosure

@@ -19,7 +19,7 @@ Make sure each method works on:
 * Empty List (0 elements)
 *)
 
-[<TestFixture>]
+[<TestFixture>][<Category "Collections.List">][<Category "FSharp.Core.Collections">]
 type ListType() =
     
     // Interfaces
@@ -82,6 +82,25 @@ type ListType() =
         CheckThrowsInvalidOperationExn(fun () -> enum.Current |> ignore)
         Assert.AreEqual(false, enum.MoveNext())
         CheckThrowsInvalidOperationExn(fun () -> enum.Current |> ignore)
+ 
+ #if !FSCORE_PORTABLE_OLD
+    [<Test>]
+    member this.IReadOnlyCollection_T() =
+        
+        // Legit IReadOnlyCollection_T
+        let c = ['a'; 'b'; 'c'] :> IReadOnlyCollection<char>
+
+        Assert.AreEqual(c.Count, Seq.length c)
+
+        let c = [1..10] :> IReadOnlyCollection<int>
+
+        Assert.AreEqual(c.Count, 10)
+
+        // Empty IReadOnlyCollection_T
+        let c = [] :> IReadOnlyCollection<int>
+
+        Assert.AreEqual(c.Count, 0)
+#endif
     
     // Base class methods
     [<Test>]
@@ -110,7 +129,7 @@ type ListType() =
         Assert.IsFalse( b.Equals(a) )
         Assert.IsFalse( a.Equals(b) )
         
-        // Co/contra varience not supported
+        // Co/contra variance not supported
         let a = [] : string list
         let b = [] : obj list
         Assert.IsFalse(a.Equals(b))
